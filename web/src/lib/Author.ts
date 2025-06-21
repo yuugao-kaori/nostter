@@ -1,37 +1,43 @@
-import { kinds as Kind, type Event } from 'nostr-tools';
+import { Kind, type Event, type Filter } from 'nostr-tools';
 import { get } from 'svelte/store';
-import { createRxBackwardReq, createRxOneshotReq, latest, latestEach, now, uniq } from 'rx-nostr';
+import { createRxOneshotReq, latest, now, uniq } from 'rx-nostr';
 import { firstValueFrom, EmptyError } from 'rxjs';
+import { Api } from './Api';
+import { pool } from '../stores/Pool';
 import {
+	followees,
 	readRelays,
 	writeRelays,
 	updateRelays,
 	authorProfile,
 	metadataEvent,
-	isMuteEvent,
-	storeMutedPubkeysByKind,
-	storeMutedTagsByEvent
-} from './stores/Author';
-import { RelayList } from './author/RelayList';
-import { filterTags, findIdentifier, parseRelayJson } from './EventHelper';
-import { customEmojisEvent, storeCustomEmojis } from './author/CustomEmojis';
+	bookmarkEvent,
+	isMuteEvent
+} from '../stores/Author';
+import { RelayList } from './RelayList';
+import { filterTags, parseRelayJson } from './EventHelper';
+import { customEmojiTags, customEmojisEvent } from '../stores/CustomEmojis';
 import type { User } from '../routes/types';
-import { lastReadAt } from './author/Notifications';
+import { lastReadAt } from '../stores/Notifications';
 import { Mute } from './Mute';
 import { WebStorage } from './WebStorage';
 import { Preferences, preferencesStore } from './Preferences';
-import { rxNostr, tie } from './timelines/MainTimeline';
+import { rxNostr } from './timelines/MainTimeline';
 import { Signer } from './Signer';
-import { authorChannelsEventStore } from './cache/Events';
-import { updateFolloweesStore } from './Contacts';
-import {
-	authorReplaceableKinds,
-	parameterizedReplaceableKinds,
-	replaceableKinds
-} from './Constants';
-import { bookmarkEvent } from './author/Bookmark';
-import { profileBadgesEvent, profileBadgesKey } from './author/ProfileBadges';
-import { contactsOfFolloweesReqEmit } from './author/MuteAutomatically';
+
+type AuthorReplaceableKind = {
+	kind: number;
+	identifier?: string;
+};
+
+export const authorReplaceableKinds: AuthorReplaceableKind[] = [
+	...Api.replaceableKinds.map((kind) => {
+		return { kind };
+	}),
+	{ kind: 30001, identifier: 'bookmark' },
+	{ kind: 30078, identifier: 'nostter-reaction-emoji' },
+	{ kind: 30078, identifier: 'nostter-read' }
+];
 
 export class Author {
 	constructor(private pubkey: string) {}
@@ -46,23 +52,81 @@ export class Author {
 		return event.pubkey !== this.pubkey && this.isRelated(event) && !isMuteEvent(event);
 	}
 
-	public async fetchRelays() {
-		const relayEvents = await RelayList.fetchEvents(this.pubkey);
+	public async fetchRelays(relays: string[]) {
+		const relayEvents = await RelayList.fetchEvents(this.pubkey, relays);
 		console.log('[relay events]', relayEvents);
 
-		RelayList.apply(relayEvents);
+		this.saveRelays(relayEvents);
+
+		await RelayList.apply(relayEvents);
+	}
+
+	public saveCustomEmojis(event: Event) {
+		console.log('[custom emoji 10030]', event);
+		const emojiTagsFilter = (tags: string[][]) => {
+			return tags.filter(([tagName, shortcode, imageUrl]) => {
+				if (tagName !== 'emoji') {
+					return false;
+				}
+				if (shortcode === undefined || imageUrl === undefined) {
+					return false;
+				}
+				if (!/^\w+$/.test(shortcode)) {
+					return false;
+				}
+				try {
+					new URL(imageUrl);
+					return true;
+				} catch {
+					return false;
+				}
+			});
+		};
+
+		// emoji tags
+		customEmojiTags.set(emojiTagsFilter(event.tags));
+		const $customEmojiTags = get(customEmojiTags);
+
+		// a tags
+		const referenceTags = event.tags.filter(([tagName]) => tagName === 'a');
+		if (referenceTags.length > 0) {
+			const filters: Filter[] = referenceTags
+				.map(([, reference]) => reference.split(':'))
+				.filter(([kind]) => kind === `${30030 as Kind}`)
+				.map(([kind, pubkey, identifier]) => {
+					return {
+						kinds: [Number(kind)],
+						authors: [pubkey],
+						'#d': [identifier]
+					};
+				});
+			console.debug('[custom emoji #a]', referenceTags, filters);
+			const api = new Api(get(pool), get(writeRelays));
+			api.fetchEvents(filters).then((events) => {
+				console.debug('[custom emoji 30030]', events);
+				for (const event of events) {
+					$customEmojiTags.push(...emojiTagsFilter(event.tags));
+				}
+				customEmojiTags.set($customEmojiTags);
+				console.log('[custom emoji tags]', $customEmojiTags);
+			});
+		}
 	}
 
 	// TODO: Ensure created_at
-	public storeRelays(replaceableEvents: Map<number, Event>) {
+	public saveRelays(replaceableEvents: Map<Kind, Event>) {
 		const contactsEvent = replaceableEvents.get(Kind.Contacts);
 		if (contactsEvent !== undefined) {
-			updateFolloweesStore(contactsEvent.tags);
+			const pubkeys = new Set(filterTags('p', contactsEvent.tags));
+			pubkeys.add(this.pubkey); // Add myself
+			followees.set(Array.from(pubkeys));
+			console.log('[contacts]', pubkeys);
 
 			if (contactsEvent.content === '') {
 				console.log('[relays in kind 3] empty');
 			} else {
 				const validRelays = [...parseRelayJson(contactsEvent.content)];
+				console.log(validRelays, pubkeys);
 				readRelays.set(
 					Array.from(
 						new Set(validRelays.filter(([, { read }]) => read).map(([relay]) => relay))
@@ -78,7 +142,7 @@ export class Author {
 				console.log('[relays in kind 3]', get(readRelays), get(writeRelays));
 			}
 		} else {
-			updateFolloweesStore([]);
+			followees.set([this.pubkey]);
 		}
 
 		const relayListEvent = replaceableEvents.get(Kind.RelayList);
@@ -105,28 +169,25 @@ export class Author {
 		}
 		console.log('[profile]', get(authorProfile));
 
-		this.storeRelays(replaceableEvents);
+		this.saveRelays(replaceableEvents);
 
-		customEmojisEvent.set(replaceableEvents.get(10030));
+		customEmojisEvent.set(replaceableEvents.get(10030 as Kind));
 		const $customEmojisEvent = get(customEmojisEvent);
 		if ($customEmojisEvent !== undefined) {
-			storeCustomEmojis($customEmojisEvent);
+			this.saveCustomEmojis($customEmojisEvent);
 		}
 
-		bookmarkEvent.set(parameterizedReplaceableEvents.get(`${30001}:bookmark`));
-		profileBadgesEvent.set(parameterizedReplaceableEvents.get(profileBadgesKey));
+		bookmarkEvent.set(parameterizedReplaceableEvents.get(`${30001 as Kind}:bookmark`));
 
-		const preferencesEvent = parameterizedReplaceableEvents.get(`${30078}:nostter-preferences`);
+		const preferencesEvent = parameterizedReplaceableEvents.get(
+			`${30078 as Kind}:nostter-preferences`
+		);
 		if (preferencesEvent !== undefined) {
 			const preferences = new Preferences(preferencesEvent.content);
 			preferencesStore.set(preferences);
-
-			if (preferences.muteAutomatically) {
-				contactsOfFolloweesReqEmit();
-			}
 		} else {
 			const regacyReactionEmojiEvent = parameterizedReplaceableEvents.get(
-				`${30078}:nostter-reaction-emoji`
+				`${30078 as Kind}:nostter-reaction-emoji`
 			);
 			if (regacyReactionEmojiEvent !== undefined) {
 				console.log('[preferences from regacy event]', regacyReactionEmojiEvent);
@@ -136,35 +197,36 @@ export class Author {
 			}
 		}
 
-		const lastReadEvent = parameterizedReplaceableEvents.get(`${30078}:nostter-read`);
+		const lastReadEvent = parameterizedReplaceableEvents.get(`${30078 as Kind}:nostter-read`);
 		const regacyLastReadEvent = parameterizedReplaceableEvents.get(
-			`${30000}:notifications/lastOpened`
+			`${30000 as Kind}:notifications/lastOpened`
 		);
 		if (lastReadEvent !== undefined) {
 			lastReadAt.set(lastReadEvent.created_at);
 		} else if (regacyLastReadEvent !== undefined) {
 			lastReadAt.set(regacyLastReadEvent.created_at);
+		} else {
+			lastReadAt.set(now() - 12 * 60 * 60);
 		}
-		console.debug('[last read at]', new Date(get(lastReadAt) * 1000));
+		console.log('[last read at]', new Date(get(lastReadAt) * 1000));
 
-		const muteEvent = replaceableEvents.get(10000);
-		const legacyMuteEvent = parameterizedReplaceableEvents.get(`${30000}:mute`);
+		const muteEvent = replaceableEvents.get(10000 as Kind);
+		const legacyMuteEvent = parameterizedReplaceableEvents.get(`${30000 as Kind}:mute`);
 
 		if (muteEvent !== undefined) {
-			await storeMutedTagsByEvent(muteEvent);
-		} else if (legacyMuteEvent !== undefined) {
-			await new Mute().migrate(legacyMuteEvent, muteEvent);
+			await new Mute(this.pubkey, get(pool), get(writeRelays)).update(muteEvent);
 		}
 
-		const mutedByKindEvents = [...parameterizedReplaceableEvents]
-			.map(([, event]) => event)
-			.filter((event) => Number(event.kind) === 30007);
-		storeMutedPubkeysByKind(mutedByKindEvents);
+		if (legacyMuteEvent !== undefined) {
+			await new Mute(this.pubkey, get(pool), get(writeRelays)).migrate(
+				legacyMuteEvent,
+				muteEvent
+			);
+		}
 
 		// Channels
-		const pinEvent = replaceableEvents.get(10001);
-		const channelsEvent = replaceableEvents.get(10005);
-		authorChannelsEventStore.set(channelsEvent);
+		const pinEvent = replaceableEvents.get(10001 as Kind);
+		const channelsEvent = replaceableEvents.get(10005 as Kind);
 		if (channelsEvent === undefined && pinEvent !== undefined) {
 			await this.migrateChannels(pinEvent);
 		}
@@ -173,18 +235,17 @@ export class Author {
 	}
 
 	private async fetchAuthorEventsWithCache(pubkey: string): Promise<{
-		replaceableEvents: Map<number, Event>;
+		replaceableEvents: Map<Kind, Event>;
 		parameterizedReplaceableEvents: Map<string, Event>;
 	}> {
 		const storage = new WebStorage(localStorage);
 		const cachedAt = storage.getCachedAt();
 		if (cachedAt !== null) {
-			console.log('[cached at]', new Date(cachedAt * 1000));
 			const replaceableEvents = new Map(
 				authorReplaceableKinds
 					.filter(({ identifier }) => identifier === undefined)
 					.map(({ kind }) => [kind, storage.getReplaceableEvent(kind)])
-					.filter((x): x is [number, Event] => x[1] !== undefined)
+					.filter((x): x is [number, Event] => x[1] !== null)
 			);
 			console.log('[author events cache re]', replaceableEvents);
 			const parameterizedReplaceableEvents = new Map(
@@ -199,69 +260,22 @@ export class Author {
 							storage.getParameterizedReplaceableEvent(kind, identifier)
 						];
 					})
-					.filter((x): x is [string, Event] => x[1] !== undefined)
+					.filter((x): x is [string, Event] => x[1] !== null)
 			);
 			console.log('[author events cache pre]', parameterizedReplaceableEvents);
 			return { replaceableEvents, parameterizedReplaceableEvents };
 		}
 
-		console.log('[cached at]', cachedAt);
-
-		const { replaceableEvents, parameterizedReplaceableEvents } =
-			await this.fetchAuthorEvents(pubkey);
+		const api = new Api(get(pool), get(writeRelays));
+		const { replaceableEvents, parameterizedReplaceableEvents } = await api.fetchAuthorEvents(
+			pubkey
+		);
 		for (const [, event] of [...replaceableEvents]) {
 			storage.setReplaceableEvent(event);
 		}
 		for (const [, event] of [...parameterizedReplaceableEvents]) {
 			storage.setParameterizedReplaceableEvent(event);
 		}
-		return { replaceableEvents, parameterizedReplaceableEvents };
-	}
-
-	private async fetchAuthorEvents(pubkey: string) {
-		const replaceableEvents = new Map<number, Event>();
-		const parameterizedReplaceableEvents = new Map<string, Event>();
-		await new Promise<void>((resolve, reject) => {
-			const authorReq = createRxBackwardReq();
-			rxNostr
-				.use(authorReq)
-				.pipe(
-					tie,
-					uniq(),
-					latestEach(({ event }) => `${event.kind}:${findIdentifier(event.tags) ?? ''}`)
-				)
-				.subscribe({
-					next: (packet) => {
-						console.log('[rx-nostr author]', packet);
-						const { event } = packet;
-						if (replaceableKinds.includes(event.kind)) {
-							replaceableEvents.set(event.kind, event);
-						} else if (parameterizedReplaceableKinds.includes(event.kind)) {
-							parameterizedReplaceableEvents.set(
-								`${event.kind}:${findIdentifier(event.tags) ?? ''}`,
-								event
-							);
-						} else {
-							console.error('[rx-nostr author logic error]', packet);
-						}
-					},
-					complete: () => {
-						console.log('[rx-nostr author complete]');
-						resolve();
-					},
-					error: (error) => {
-						console.error('[rx-nostr author error]', error);
-						reject();
-					}
-				});
-			authorReq.emit([
-				{
-					kinds: [...replaceableKinds, ...parameterizedReplaceableKinds],
-					authors: [pubkey]
-				}
-			]);
-			authorReq.over();
-		});
 		return { replaceableEvents, parameterizedReplaceableEvents };
 	}
 
@@ -282,13 +296,10 @@ export class Author {
 					authors: [regacyChannelsEvent.pubkey]
 				}
 			});
-			const packet = await firstValueFrom(
-				rxNostr.use(channelsReq).pipe(tie, uniq(), latest())
-			);
+			const packet = await firstValueFrom(rxNostr.use(channelsReq).pipe(uniq(), latest()));
 			console.log('[channels event]', packet);
 			storage.setReplaceableEvent(packet.event);
-			authorChannelsEventStore.set(packet.event);
-			return; // Already migrated
+			return;
 		} catch (error) {
 			if (!(error instanceof EmptyError)) {
 				throw error;
@@ -306,7 +317,7 @@ export class Author {
 		});
 		rxNostr
 			.use(channelsMetadataReq)
-			.pipe(tie, uniq())
+			.pipe(uniq())
 			.subscribe({
 				next: (packet) => {
 					console.log('[channel metadata next]', packet);
@@ -329,9 +340,8 @@ export class Author {
 					});
 					rxNostr.send(event).subscribe((packet) => {
 						console.log('[channels migration send]', packet);
-						if (packet.ok) {
+						if (packet.ok && storage.getReplaceableEvent(10005) === undefined) {
 							storage.setReplaceableEvent(event);
-							authorChannelsEventStore.set(event);
 						}
 					});
 
@@ -345,7 +355,6 @@ export class Author {
 					});
 					rxNostr.send(pinEvent).subscribe((packet) => {
 						console.log('[channels migration send pin]', packet);
-						storage.setReplaceableEvent(pinEvent);
 					});
 				}
 			});

@@ -1,32 +1,30 @@
 <script lang="ts">
 	import { _ } from 'svelte-i18n';
-	import { nip19 } from 'nostr-tools';
 	import { appName } from '$lib/Constants';
-	import { decryptListContent } from '$lib/List';
 	import Notification from './Notification.svelte';
 	import ReactionEmoji from './ReactionEmoji.svelte';
 	import Logout from '../Logout.svelte';
-	import { author, muteEvent, pubkey, rom } from '$lib/stores/Author';
-	import { developerMode } from '$lib/stores/Preference';
+	import { author } from '../../../stores/Author';
+	import { debugMode } from '../../../stores/Preference';
+	import WordMute from './WordMute.svelte';
 	import AutoRefresh from './AutoRefresh.svelte';
 	import MutedUsers from './MutedUsers.svelte';
 	import MutedEvents from './MutedEvents.svelte';
-	import MutedWords from './MutedWords.svelte';
 	import ClearEmojiMartCache from './ClearEmojiMartCache.svelte';
 	import Theme from './Theme.svelte';
+	import ZapButton from '$lib/components/ZapButton.svelte';
 	import UriScheme from './UriScheme.svelte';
-	import EnablePreview from './EnablePreview.svelte';
-	import DeveloperMode from './DeveloperMode.svelte';
-	import WebStorage from './WebStorage.svelte';
-	import RelayStates from './RelayStates.svelte';
-	import WalletConnect from './WalletConnect.svelte';
-	import Reload from './Reload.svelte';
-	import ClearEventCacheAndReload from './ClearEventCacheAndReload.svelte';
-	import MediaUploader from './MediaUploader.svelte';
-	import ImageOptimization from './ImageOptimization.svelte';
-	import TimelineFilter from './TimelineFilter.svelte';
-	import MuteAutomatically from './MuteAutomatically.svelte';
-	import Json from '$lib/components/Json.svelte';
+
+	let debugCounter = 0;
+
+	function enableDebugMode() {
+		debugCounter++;
+		if (debugCounter >= 5) {
+			$debugMode = !$debugMode;
+			debugCounter = 0;
+			console.log('[debug mode]', $debugMode ? 'enabled' : 'disabled');
+		}
+	}
 </script>
 
 <svelte:head>
@@ -35,83 +33,74 @@
 
 <h1>{$_('layout.header.preferences')}</h1>
 
-{#if $author !== undefined && !$rom}
-	<section class="card">
-		<h2>{$_('preferences.shared')}</h2>
-		<div>
-			<a href="/profile">{$_('pages.profile_edit')}</a>
-		</div>
-		<div><ReactionEmoji /></div>
-		<div>
-			<a href="https://emojito.meme/" target="_blank" rel="noopener noreferrer">
-				{$_('preferences.emoji.custom')}
-			</a>
-		</div>
-		<div><MediaUploader /></div>
-		<h3>{$_('preferences.mute.mute')}</h3>
-		<details>
-			<summary>{$_('preferences.mute.pubkeys')}</summary>
-			<MutedUsers />
-		</details>
-		<details>
-			<summary>{$_('preferences.mute.events')}</summary>
-			<MutedEvents />
-		</details>
-		<details>
-			<summary>{$_('preferences.mute.words')}</summary>
-			<MutedWords />
-		</details>
-		{#if $developerMode}
-			<details>
-				<summary>JSON</summary>
-				<div>public</div>
-				<Json object={$muteEvent?.tags ?? []} />
-				<div>private</div>
-				{#await decryptListContent($muteEvent?.content ?? '')}
-					<Json object={[]} />
-				{:then tags}
-					<Json object={tags} />
-				{/await}
-			</details>
-		{/if}
-		<div><MuteAutomatically /></div>
-		<div>
-			<a href="/{nip19.nprofileEncode({ pubkey: $pubkey })}/relays">
-				{$_('pages.relays_edit')}
-			</a>
-		</div>
-	</section>
+<div><Theme /></div>
+{#if $author !== undefined}
+	<div><ReactionEmoji /></div>
+	<div>
+		<a href="https://emojis-iota.vercel.app/" target="_blank" rel="noopener noreferrer">
+			Edit custom emojis
+		</a>
+	</div>
+	<div><MutedUsers /></div>
+	<div><MutedEvents /></div>
+	<div><WordMute /></div>
 {/if}
+<div><Notification /></div>
+<div><UriScheme /></div>
+<div><AutoRefresh /></div>
+{#if $debugMode}
+	<div><ClearEmojiMartCache /></div>
+{/if}
+<div><Logout /></div>
 
-<section class="card">
-	<h2>{$_('preferences.device')}</h2>
-	<div><Theme /></div>
-	<div><AutoRefresh /></div>
-	<div><EnablePreview /></div>
-	<div><ImageOptimization /></div>
-	<div><Notification /></div>
-	<div><UriScheme /></div>
-	<h3>{$_('preferences.timeline_filter.title')}</h3>
-	<div><TimelineFilter /></div>
-	<div><WalletConnect /></div>
-	<div><DeveloperMode /></div>
-	{#if $developerMode}
-		<div><RelayStates /></div>
-		<div><WebStorage /></div>
-		<h3>{$_('preferences.trouble_shooting')}</h3>
-		<div><Reload /></div>
-		<div><ClearEventCacheAndReload /></div>
-		<div><ClearEmojiMartCache /></div>
-	{/if}
-</section>
-
-<section class="card">
-	<h2>{$_('logout.logout')}</h2>
-	<div><Logout /></div>
-</section>
+<!-- svelte-ignore a11y-click-events-have-key-events -->
+<!-- svelte-ignore a11y-no-noninteractive-element-interactions -->
+<h1 on:click={enableDebugMode}>About nostter</h1>
+<div>
+	<span>GitHub:</span>
+	<a href="https://github.com/SnowCait/nostter" target="_blank" rel="noopener noreferrer">
+		SnowCait/nostter
+	</a>
+</div>
+<div class="user">
+	<span>Author:</span>
+	<a href="/npub1s02jksmr6tgmcksf3hnmue7pyzlm0sxwarh7lk8tdeprw2hjg6ysp7fxtw">@SnowCait</a>
+	<ZapButton pubkey="83d52b4363d2d1bc5a098de7be67c120bfb7c0cee8efefd8eb6e42372af24689" />
+</div>
+<div class="user">
+	<span>UI:</span>
+	<a href="/npub194qhhn5vzzyrsqaugfms8c7ycqjyvhyguurra450nhlweatfzxkqy8tgkd">@kaiji</a>
+	<ZapButton pubkey="2d417bce8c10883803bc427703e3c4c024465c88e7063ed68f9dfeecf56911ac" />
+</div>
+<div class="user">
+	<span>Logo:</span>
+	<a href="/npub1njty7prjt49kju6c3mjjlxvm0hjymf5s2qlfcyjqg5e0k8kftp3s4dpsn5">@apco</a>
+	<ZapButton pubkey="9c964f04725d4b6973588ee52f999b7de44da690503e9c12404532fb1ec95863" />
+</div>
+<div class="user">
+	<span>Illustration:</span>
+	<a href="/npub1e09suzmq9mp6nt0ud9ttl03790qjx70wzwlc2pwwghcusvwju54qs0c800">@stok33</a>
+	<ZapButton pubkey="cbcb0e0b602ec3a9adfc6956bfbe3e2bc12379ee13bf8505ce45f1c831d2e52a" />
+</div>
+<img src="/nostter-chan.jpg" alt="" />
 
 <style>
 	div {
 		margin: 1em auto;
+	}
+
+	img {
+		width: 50%;
+		border: 1px solid lightgray;
+		border-radius: 10px;
+	}
+
+	.user {
+		display: flex;
+		align-items: center;
+	}
+
+	.user * {
+		margin-right: 0.2rem;
 	}
 </style>

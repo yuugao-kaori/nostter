@@ -1,11 +1,7 @@
 <script lang="ts">
-	import { createEventDispatcher } from 'svelte';
-
 	export let open = false;
 
 	let dialog: HTMLDialogElement | undefined;
-
-	const dispatch = createEventDispatcher();
 
 	$: {
 		if (open) {
@@ -27,16 +23,14 @@
 	function onClose(): void {
 		console.debug('[dialog on close]');
 		open = false;
-		dispatch('close');
 	}
 </script>
 
-<!-- svelte-ignore a11y-no-noninteractive-element-interactions -->
 <dialog
 	bind:this={dialog}
 	class="card"
 	on:click={tryClose}
-	on:keyup|stopPropagation
+	on:keyup|stopPropagation={console.debug}
 	on:close={onClose}
 >
 	<div class="dialog-content">

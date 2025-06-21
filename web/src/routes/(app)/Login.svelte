@@ -2,15 +2,15 @@
 	import { onMount } from 'svelte';
 	import { _ } from 'svelte-i18n';
 	import type { Nip07 } from 'nostr-typedef';
-	import { generateSecretKey, getPublicKey, nip19 } from 'nostr-tools';
+	import { generatePrivateKey, getPublicKey, nip19 } from 'nostr-tools';
 	import { Login } from '$lib/Login';
-	import { loginType } from '$lib/stores/Author';
+	import { loginType } from '../../stores/Author';
 	import { page } from '$app/stores';
 	import { afterNavigate, goto } from '$app/navigation';
-	import { authorProfile } from '$lib/stores/Author';
+	import { authorProfile } from '../../stores/Author';
 	import { WebStorage } from '$lib/WebStorage';
 	import ModalDialog from '$lib/components/ModalDialog.svelte';
-	import NostterLogo from '$lib/components/logo/NostterLogo.svelte';
+	import NostterLogo from './parts/NostterLogo.svelte';
 
 	let nostr: Nip07.Nostr | undefined;
 	let key = '';
@@ -22,9 +22,6 @@
 	const login = new Login();
 
 	async function loginWithNip07() {
-		const storage = new WebStorage(localStorage);
-		storage.set('login', 'NIP-07');
-
 		await login.withNip07();
 		await gotoHome();
 	}
@@ -39,12 +36,12 @@
 	}
 
 	async function loginWithDemo() {
-		await goto('/public');
+		await goto('/home');
 	}
 
 	function createAccount(): void {
 		showCreateAccountDialog = true;
-		const seckey = generateSecretKey();
+		const seckey = generatePrivateKey();
 		key = nip19.nsecEncode(seckey);
 		console.log('[pubkey]', getPublicKey(seckey));
 	}
@@ -52,7 +49,7 @@
 	async function register(): Promise<void> {
 		await login.withNsec(key);
 		await login.saveBasicInfo(name);
-		await goto('/public');
+		await gotoHome();
 	}
 
 	function showLogin(): void {
@@ -185,7 +182,7 @@
 								{/if}
 								<div>
 									<button
-										on:click={loginWithNip07}
+										on:click|once={loginWithNip07}
 										disabled={$loginType !== undefined || nostr === undefined}
 									>
 										{$_('login.browser_extension')}
@@ -200,7 +197,7 @@
 							</div>
 
 							<section>
-								<form method="dialog" on:submit|preventDefault={loginWithKey}>
+								<form method="dialog" on:submit|preventDefault|once={loginWithKey}>
 									<div>
 										<input
 											type="password"

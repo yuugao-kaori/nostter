@@ -1,7 +1,4 @@
 {
-	"app": {
-		"description": "Web 向け Nostr クライアント。"
-	},
 	"layout": {
 		"header": {
 			"home": "ホーム",
@@ -15,22 +12,14 @@
 		}
 	},
 	"pages": {
-		"profile_edit": "プロフィールを編集",
+		"profile_edit": "プロフィール編集",
 		"thread": "スレッド",
 		"followees": "フォロー中",
 		"followers": "フォロワー",
-		"followers_see": "確認",
 		"pinned": "ピン留め",
 		"reactions": "リアクション",
 		"relays": "リレー",
-		"relays_edit": "リレーを編集",
-		"timeline": "タイムライン",
-		"media": "メディア",
-		"latest": "最新の投稿",
-		"public": "パブリック",
-		"trend": {
-			"message": "トレンドはパブリックに統合されます。"
-		}
+		"timeline": "タイムライン"
 	},
 	"login": {
 		"browser_extension": "拡張機能でログイン",
@@ -44,29 +33,8 @@
 		"hero-message": "すべての自由が、ここに。",
 		"hero-message-sub": "必要なのは名前だけ。メールアドレスも要らない、凍結もない、オープンなSNS。絵文字キッチンで遊ぼう。"
 	},
-	"logout": {
-		"logout": "ログアウト",
-		"ensure": "ログアウトする前にプライベートキーを必ず保存してください",
-		"private_key": "プライベートキー",
-		"show": "表示",
-		"saved": "保存しました"
-	},
 	"editor": {
-		"content": {
-			"placeholder": "いまどうしてる？"
-		},
-		"warning": {
-			"nsec": "プライベートキー (nsec) が含まれています。プライベートキーは投稿しないでください。"
-		},
-		"post": {
-			"button": "ポストする",
-			"empty": "空のまま投稿しますか？",
-			"nsec": "プライベートキー (nsec) が含まれています。本当に投稿しますか？"
-		},
-		"close": {
-			"button": "閉じる",
-			"confirm": "下書きがあります。閉じますか？"
-		}
+		"post": "ポストする"
 	},
 	"gdpr": {
 		"heading": "クッキー",
@@ -84,241 +52,11 @@
 		}
 	},
 	"post": "投稿",
-	"follow": {
-		"follow": "フォロー",
-		"following": "フォロー中",
-		"organize": "フォロー整理"
-	},
+	"follow": "フォロー",
+	"following": "フォロー中",
 	"or": "または",
 	"preferences": {
-		"device": "端末",
-		"shared": "アカウント",
-		"theme": {
-			"theme": "テーマ",
-			"system": "システム",
-			"light": "ライト",
-			"dark": "ダーク"
-		},
-		"emoji": {
-			"like": "いいねの絵文字",
-			"custom": "絵文字を追加"
-		},
-		"auto_refresh": "自動更新",
-		"media_preview": "メディアプレビュー",
-		"image_optimization": "画像最適化",
-		"image_optimization_none": "なし",
-		"media_uploader": {
-			"title": "メディアのアップロード先"
-		},
 		"uri_scheme": "web+nostr: を nostter で開く",
-		"enable_uri_scheme": "有効化",
-		"developer_mode": "開発者モード",
-		"mute": {
-			"mute": "ミュート",
-			"pubkeys": "ユーザー",
-			"events": "スレッド / チャンネル",
-			"words": "単語",
-			"none": "-",
-			"automatically": "フォロー中のユーザーがフォローしていないユーザーからの通知を表示しない"
-		},
-		"trouble_shooting": "トラブルシューティング",
-		"clear_emoji_cache": "絵文字キャッシュクリア",
-		"clear_event_cache": "イベントキャッシュクリア＆再読み込み",
-		"reload": "再読み込み",
-		"timeline_filter": {
-			"title": "タイムラインフィルター",
-			"categories": {
-				"notes": "ノート",
-				"dms": "DM",
-				"reposts": "リポスト",
-				"reactions": "リアクション（いいね）",
-				"channels": "チャンネル",
-				"zaps": "Zap"
-			}
-		}
-	},
-	"content": {
-		"show": "表示",
-		"muted": "ミュートされたコンテンツ",
-		"deleted": "削除されたコンテンツ",
-		"not_found": "見つかりませんでした"
-	},
-	"wallet": {
-		"unknown": "ウォレットのステータスが分かりませんでした。ウォレットを確認してください。"
-	},
-	"search": {
-		"search": "検索",
-		"options": "検索オプション",
-		"mine": "自分の投稿",
-		"proxy": "外部 SNS の投稿を含める",
-		"notes": "投稿",
-		"users": "ユーザー"
-	},
-	"public_chat": {
-		"create_channel": "チャンネルを作成",
-		"create": "作成",
-		"channel": {
-			"name": "チャンネル名（必須）",
-			"about": "説明",
-			"picture": "画像 URL"
-		}
-	},
-	"actions": {
-		"bookmark": {
-			"button": "ブックマーク",
-			"failed": "ブックマークできませんでした"
-		},
-		"unbookmark": {
-			"button": "ブックマークを外す",
-			"confirm": "ブックマークを外しますか？",
-			"failed": "ブックマークを外せませんでした"
-		},
-		"repost": {
-			"button": "リポスト",
-			"again": "もう一度リポストしますか？"
-		},
-		"quote": {
-			"button": "引用"
-		},
-		"reaction": {
-			"again": "もう一度リアクションしますか？"
-		},
-		"copy_id": {
-			"button": "ID をコピー"
-		},
-		"copy_npub": {
-			"button": "ID (npub) をコピー"
-		},
-		"copy_nprofile": {
-			"button": "ID (nprofile) をコピー"
-		},
-		"copy_url": {
-			"button": "リンクをコピー"
-		},
-		"open_url": {
-			"button": "%s で開く"
-		},
-		"open_in_other_apps": {
-			"button": "他のアプリで開く"
-		},
-		"share": {
-			"button": "リンクを共有"
-		},
-		"details": {
-			"button": "詳細"
-		},
-		"broadcast": {
-			"button": "ブロードキャスト"
-		},
-		"follow": {
-			"myself": "自分自身をフォローする",
-			"all": {
-				"button": "全員をフォロー",
-				"confirm": "本当に %d ユーザーをフォローしますか？"
-			}
-		},
-		"unfollow": {
-			"myself": "自分自身のフォローを外す"
-		},
-		"mute": {
-			"button": "ミュート",
-			"user": "ユーザーをミュート",
-			"reposts": "リポストをミュート",
-			"reactions": "リアクション（いいね）をミュート",
-			"zaps": "Zap をミュート",
-			"thread": "スレッドをミュート",
-			"failed": "ミュートできませんでした。"
-		},
-		"unmute": {
-			"button": "ミュート解除",
-			"user": "ユーザーをミュート解除",
-			"reposts": "リポストをミュート解除",
-			"reactions": "リアクション（いいね）をミュート解除",
-			"zaps": "Zap をミュート解除",
-			"thread": "スレッドをミュート解除",
-			"failed": "ミュートを解除できませんでした。"
-		},
-		"delete": {
-			"button": "削除",
-			"confirm": "本当にこの投稿を削除しますか？"
-		}
-	},
-	"thread": {
-		"date": "前後の投稿",
-		"reposts": {
-			"after": {
-				"title": "リポスト後の投稿",
-				"none": "-"
-			}
-		},
-		"quotes": {
-			"title": "引用"
-		},
-		"translation": {
-			"title": "Google 翻訳",
-			"url": "https://translate.google.co.jp/?sl=auto&tl=ja&text={0}&op=translate"
-		}
-	},
-	"error": {
-		"title": "にゃーん",
-		"message": "ページが見つからなかったかエラーが発生しました。"
-	},
-	"badge": {
-		"accept": "受け取る",
-		"accepted": "受取り済",
-		"none": "まだバッジはありません。",
-		"create": "バッジを作成する。"
-	},
-	"replay": {
-		"title": "リプレイ",
-		"play": "再生"
-	},
-	"about": {
-		"title": "nostter について",
-		"others": "その他"
-	},
-	"media": {
-		"upload": {
-			"failed": "アップロードに失敗しました。",
-			"apply": "適用"
-		}
-	},
-	"lists": {
-		"title": "リスト",
-		"particle": "の",
-		"none": "リストが見つかりませんでした。",
-		"create": "作成",
-		"edit": "リストへ追加/削除"
-	},
-	"notifications": {
-		"all": "すべて",
-		"others": "他",
-		"followees_only": "フォローのみ"
-	},
-	"menu": {
-		"developer": "開発者",
-		"caution": "注意"
-	},
-	"qrcode": {
-		"scan": "QR コードからプロフィールを読み込む"
-	},
-	"profile": {
-		"nip05": {
-			"unknown": "不明",
-			"impersonation": "なりすまし"
-		}
-	},
-	"poll": {
-		"vote": "投票",
-		"ends_at": "%s まで",
-		"result": "結果を見る"
-	},
-	"zap": {
-		"title": "Zap",
-		"message": "メッセージ（オプション）",
-		"send": "Zap"
-	},
-	"timeline": {
-		"update": "新しい投稿を表示"
+		"enable_uri_scheme": "有効化"
 	}
 }

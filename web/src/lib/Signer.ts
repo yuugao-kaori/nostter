@@ -1,31 +1,34 @@
 import {
+	getEventHash,
 	type Event,
+	signEvent,
 	nip19,
 	type EventTemplate,
 	getPublicKey,
-	nip04,
-	finalizeEvent
+	nip04
 } from 'nostr-tools';
 import { WebStorage } from './WebStorage';
-import type { Nip07, UnsignedEvent } from 'nostr-typedef';
+import type { UnsignedEvent } from 'nostr-typedef';
 
-declare const window: {
-	nostr: Nip07.Nostr | undefined;
-};
+interface Window {
+	// NIP-07
+	nostr: any;
+}
+declare const window: Window;
 
 export class Signer {
-	public static async getPublicKey(): Promise<string> {
+	public static getPublicKey(): string {
 		const storage = new WebStorage(localStorage);
 		const login = storage.get('login');
 		if (login === null || login.startsWith('npub')) {
 			throw new Error('[logic error]');
 		}
 
-		if (login === 'NIP-07' && window.nostr !== undefined) {
-			return await window.nostr.getPublicKey();
+		if (login === 'NIP-07') {
+			return window.nostr.getPublicKey();
 		} else if (login.startsWith('nsec')) {
 			const { data: seckey } = nip19.decode(login);
-			return getPublicKey(seckey as Uint8Array);
+			return getPublicKey(seckey as string);
 		} else {
 			throw new Error('[logic error]');
 		}
@@ -38,13 +41,34 @@ export class Signer {
 			throw new Error('[logic error]');
 		}
 
-		if (login === 'NIP-07' && window.nostr !== undefined) {
+		if (login === 'NIP-07') {
 			return await window.nostr.signEvent(unsignedEvent);
 		} else if (login.startsWith('nsec')) {
 			const { data: seckey } = nip19.decode(login);
-			return finalizeEvent(unsignedEvent, seckey as Uint8Array);
+			const event = unsignedEvent as Event;
+			if (event.pubkey === undefined) {
+				event.pubkey = getPublicKey(seckey as string);
+			}
+			event.id = getEventHash(event);
+			event.sig = signEvent(event, seckey as string);
+			return event;
 		} else {
 			throw new Error('[logic error]');
+		}
+	}
+
+	public static async getRelays(): Promise<{ [url: string]: { read: boolean; write: boolean } }> {
+		const storage = new WebStorage(localStorage);
+		const login = storage.get('login');
+		if (login === 'NIP-07') {
+			try {
+				return await window.nostr.getRelays();
+			} catch (error) {
+				console.error('[NIP-07 getRelays()]', error);
+				return {};
+			}
+		} else {
+			return {};
 		}
 	}
 
@@ -55,7 +79,7 @@ export class Signer {
 			throw new Error('[logic error]');
 		}
 
-		if (login === 'NIP-07' && window.nostr !== undefined && window.nostr.nip04 !== undefined) {
+		if (login === 'NIP-07' && window.nostr.nip04 !== undefined) {
 			return await window.nostr.nip04.encrypt(pubkey, plaintext);
 		} else if (login.startsWith('nsec')) {
 			const { data: seckey } = nip19.decode(login);
@@ -72,7 +96,7 @@ export class Signer {
 			throw new Error('[logic error]');
 		}
 
-		if (login === 'NIP-07' && window.nostr !== undefined && window.nostr.nip04 !== undefined) {
+		if (login === 'NIP-07' && window.nostr.nip04 !== undefined) {
 			return await window.nostr.nip04.decrypt(pubkey, ciphertext);
 		} else if (login.startsWith('nsec')) {
 			const { data: seckey } = nip19.decode(login);

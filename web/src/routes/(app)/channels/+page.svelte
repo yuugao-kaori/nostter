@@ -1,38 +1,37 @@
 <script lang="ts">
-	import { createRxOneshotReq, filterByKind, latestEach, uniq } from 'rx-nostr';
+	import { createRxOneshotReq, filterKind, uniq } from 'rx-nostr';
+	import type { Event } from 'nostr-typedef';
 	import { _ } from 'svelte-i18n';
-	import { goto } from '$app/navigation';
-	import {
-		authorChannelsEventStore,
-		cachedEvents,
-		channelMetadataEventsStore
-	} from '$lib/cache/Events';
-	import { rxNostr, tie } from '$lib/timelines/MainTimeline';
+	import { afterNavigate, goto } from '$app/navigation';
+	import { WebStorage } from '$lib/WebStorage';
+	import { cachedEvents, channelMetadataEvents } from '$lib/cache/Events';
+	import { rxNostr } from '$lib/timelines/MainTimeline';
 	import { filterTags, findChannelId } from '$lib/EventHelper';
 	import { EventItem } from '$lib/Items';
 	import TimelineView from '../TimelineView.svelte';
 	import { appName } from '$lib/Constants';
-	import CreateChannelButton from '$lib/components/actions/CreateChannelButton.svelte';
-	import { share } from 'rxjs';
 
-	let channelIds = new Set<string>();
+	let channelsEvent: Event | undefined;
+	let channelIds: string[] = [];
 	let keyword = '';
 
-	$: items = [...channelIds]
-		.map((channelId) => {
-			const event = cachedEvents.get(channelId);
-			if (event !== undefined) {
-				return new EventItem(event);
-			} else {
-				return undefined;
-			}
-		})
-		.filter((x): x is EventItem => x !== undefined);
+	$: items = channelIds.map((channelId) => {
+		let event = channelMetadataEvents.get(channelId);
+		if (event !== undefined) {
+			return new EventItem(event);
+		}
+		event = cachedEvents.get(channelId);
+		if (event !== undefined) {
+			return new EventItem(event);
+		}
 
-	$: if ($authorChannelsEventStore !== undefined && channelIds.size === 0) {
-		console.log('[channels page]', $authorChannelsEventStore);
+		throw new Error(`Logic error: ${channelId}`);
+	});
 
-		const ids = filterTags('e', $authorChannelsEventStore.tags);
+	$: if (channelsEvent !== undefined && channelIds.length === 0) {
+		console.log('[channels fetch]', channelsEvent);
+
+		const ids = filterTags('e', channelsEvent.tags);
 		const channelsMetadataReq = createRxOneshotReq({
 			filters: [
 				{
@@ -41,37 +40,33 @@
 				},
 				{
 					kinds: [41],
-					'#e': ids
+					ids
 				}
 			]
 		});
-		const observable = rxNostr.use(channelsMetadataReq).pipe(tie, uniq(), share());
-		observable.pipe(filterByKind(40)).subscribe((packet) => {
-			console.log('[channel definition packet]', packet);
+		const observable = rxNostr.use(channelsMetadataReq).pipe(uniq());
+		observable.pipe(filterKind(40)).subscribe((packet) => {
+			console.log('[channel metadata original]', packet);
 			const channelId = packet.event.id;
 			cachedEvents.set(channelId, packet.event);
-			channelIds.add(channelId);
+			channelIds.push(channelId);
 			channelIds = channelIds;
 		});
-		observable
-			.pipe(
-				filterByKind(41),
-				latestEach(({ event }) => findChannelId(event.tags))
-			)
-			.subscribe((packet) => {
-				console.log('[channel metadata packet]', packet);
-				const channelId = findChannelId(packet.event.tags);
-				if (channelId === undefined) {
-					return;
-				}
-
-				const cache = $channelMetadataEventsStore.get(channelId);
-				if (cache === undefined || cache.created_at < packet.event.created_at) {
-					$channelMetadataEventsStore.set(channelId, packet.event);
-					$channelMetadataEventsStore = $channelMetadataEventsStore;
-				}
-			});
+		observable.pipe(filterKind(41)).subscribe((packet) => {
+			console.log('[channel metadata]', packet);
+			const channelId = findChannelId(packet.event.tags);
+			if (channelId !== undefined) {
+				channelMetadataEvents.set(channelId, packet.event);
+			}
+		});
 	}
+
+	afterNavigate(() => {
+		console.log('[channels page]');
+
+		const storage = new WebStorage(localStorage);
+		channelsEvent = storage.getReplaceableEvent(10005);
+	});
 
 	async function search() {
 		console.log('[channels search]', keyword);
@@ -93,18 +88,13 @@
 
 <form on:submit|preventDefault={search}>
 	<input type="search" bind:value={keyword} on:keyup|stopPropagation={() => console.debug} />
-	<input type="submit" value={$_('search.search')} />
+	<input type="submit" value="Search" />
 </form>
 
-<div>
-	<CreateChannelButton />
-</div>
-
-<TimelineView {items} showLoading={false} />
+<TimelineView {items} load={async () => console.debug()} showLoading={false} />
 
 <style>
-	form,
-	div {
+	form {
 		margin: 1rem auto;
 	}
 </style>

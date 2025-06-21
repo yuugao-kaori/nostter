@@ -2,16 +2,14 @@
 	import { createRxOneshotReq, uniq } from 'rx-nostr';
 	import { tap } from 'rxjs';
 	import { _ } from 'svelte-i18n';
-	import { pubkey as authorPubkey, rom } from '$lib/stores/Author';
+	import { pubkey as authorPubkey, rom, bookmarkEvent } from '../../../../stores/Author';
 	import { page } from '$app/stores';
 	import TimelineView from '../../TimelineView.svelte';
-	import { bookmarkEvent } from '$lib/author/Bookmark';
-	import { authorActionReqEmit } from '$lib/author/Action';
-	import { appName, reverseChronologicalItem } from '$lib/Constants';
+	import { appName } from '$lib/Constants';
 	import { filterTags } from '$lib/EventHelper';
 	import { Signer } from '$lib/Signer';
 	import { EventItem } from '$lib/Items';
-	import { referencesReqEmit, rxNostr, tie } from '$lib/timelines/MainTimeline';
+	import { referencesReqEmit, rxNostr } from '$lib/timelines/MainTimeline';
 	import type { LayoutData } from '../$types';
 
 	export let data: LayoutData;
@@ -34,18 +32,13 @@
 			rxNostr
 				.use(eventsReq)
 				.pipe(
-					tie,
 					uniq(),
-					tap(({ event }) => {
-						referencesReqEmit(event);
-						authorActionReqEmit(event);
-					})
+					tap(({ event }) => referencesReqEmit(event))
 				)
 				.subscribe((packet) => {
 					console.log('[rx-nostr public bookmark packet]', packet);
 					publicBookmarkEventItems.push(new EventItem(packet.event));
-					publicBookmarkEventItems =
-						publicBookmarkEventItems.sort(reverseChronologicalItem);
+					publicBookmarkEventItems = publicBookmarkEventItems;
 				});
 		}
 
@@ -65,19 +58,13 @@
 						rxNostr
 							.use(eventsReq)
 							.pipe(
-								tie,
 								uniq(),
-								tap(({ event }) => {
-									referencesReqEmit(event);
-									authorActionReqEmit(event);
-								})
+								tap(({ event }) => referencesReqEmit(event))
 							)
 							.subscribe((packet) => {
 								console.log('[rx-nostr private bookmark packet]', packet);
 								privateBookmarkEventItems.push(new EventItem(packet.event));
-								privateBookmarkEventItems = privateBookmarkEventItems.toSorted(
-									(a, b) => b.event.created_at - a.event.created_at
-								);
+								privateBookmarkEventItems = privateBookmarkEventItems;
 							});
 					}
 				})
@@ -96,10 +83,18 @@
 
 <h2>Public</h2>
 
-<TimelineView items={publicBookmarkEventItems} showLoading={false} />
+<TimelineView
+	items={publicBookmarkEventItems}
+	load={async () => console.debug()}
+	showLoading={false}
+/>
 
 {#if privateBookmarkEventItems.length > 0}
 	<h2>Private</h2>
 
-	<TimelineView items={privateBookmarkEventItems} showLoading={false} />
+	<TimelineView
+		items={privateBookmarkEventItems}
+		load={async () => console.debug()}
+		showLoading={false}
+	/>
 {/if}

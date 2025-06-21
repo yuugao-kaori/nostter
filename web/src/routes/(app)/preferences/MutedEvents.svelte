@@ -1,22 +1,22 @@
 <script lang="ts">
-	import { _ } from 'svelte-i18n';
 	import { nip19 } from 'nostr-tools';
-	import { unmute } from '$lib/author/Mute';
-	import { muteEventIds } from '$lib/stores/Author';
-	import IconTrash from '@tabler/icons-svelte/icons/trash';
-	import { getSeenOnRelays } from '$lib/timelines/MainTimeline';
+	import { Mute } from '$lib/Mute';
+	import { pubkey, muteEventIds, writeRelays } from '../../../stores/Author';
+	import { pool } from '../../../stores/Pool';
+	import IconTrash from '@tabler/icons-svelte/dist/svelte/icons/IconTrash.svelte';
 
 	let unmuting = false;
 
-	async function onUnmute(eventId: string) {
+	const mute = new Mute($pubkey, $pool, $writeRelays);
+
+	async function unmute(eventId: string) {
 		console.log('[unmute event]', eventId);
 
 		unmuting = true;
 
 		try {
-			await unmute('e', eventId);
+			await mute.unmutePrivate('e', eventId);
 		} catch (error) {
-			console.error('[unmute failed]', error);
 			alert('Failed to unmute.');
 		}
 
@@ -24,19 +24,18 @@
 	}
 </script>
 
+<h4>Muted Threads and Channels</h4>
+
 <ul>
 	{#each $muteEventIds as eventId}
-		{@const nevent = nip19.neventEncode({ id: eventId, relays: getSeenOnRelays(eventId) })}
 		<li>
-			<a href="/{nevent}">
-				<span>{nevent.slice(0, 'nevent1'.length + 7)}</span>
+			<a href="/{nip19.neventEncode({ id: eventId })}">
+				<span>{nip19.neventEncode({ id: eventId }).slice(0, 'nevent1'.length + 7)}</span>
 			</a>
-			<button class="clear" disabled={unmuting} on:click={() => onUnmute(eventId)}>
+			<button class="clear" disabled={unmuting} on:click={() => unmute(eventId)}>
 				<IconTrash size={18} />
 			</button>
 		</li>
-	{:else}
-		<li>{$_('preferences.mute.none')}</li>
 	{/each}
 </ul>
 

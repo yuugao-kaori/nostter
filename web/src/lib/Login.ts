@@ -1,9 +1,9 @@
 import { get } from 'svelte/store';
-import { author, authorProfile, loginType, pubkey, rom } from './stores/Author';
+import { author, authorProfile, loginType, pubkey, rom } from '../stores/Author';
 import { Signer } from './Signer';
+import { defaultRelays } from './Constants';
 import { Author } from './Author';
 import { getPublicKey, nip19 } from 'nostr-tools';
-import { robohash } from './Items';
 import { WebStorage } from './WebStorage';
 import { rxNostr } from './timelines/MainTimeline';
 import { now } from 'rx-nostr';
@@ -11,13 +11,13 @@ import type { User } from '../routes/types';
 
 export class Login {
 	public async saveBasicInfo(name: string): Promise<void> {
-		console.log('[relays]', rxNostr.getDefaultRelays());
+		await rxNostr.switchRelays(defaultRelays);
+		console.log('[relays]', rxNostr.getRelays());
 
-		const pubkey = await Signer.getPublicKey();
 		const user = {
 			name,
 			display_name: name,
-			picture: robohash(pubkey)
+			picture: `https://robohash.org/${nip19.npubEncode(Signer.getPublicKey())}?set=set4`
 		} as User;
 		const metadataEvent = await Signer.signEvent({
 			kind: 0,
@@ -34,7 +34,7 @@ export class Login {
 		const relayListEvent = await Signer.signEvent({
 			kind: 10002,
 			content: '',
-			tags: Object.entries(rxNostr.getDefaultRelays()).map(([, { url, read, write }]) => {
+			tags: rxNostr.getRelays().map(({ url, read, write }) => {
 				const tag = ['r', url];
 				if (read && !write) {
 					tag.push('read');
@@ -55,6 +55,9 @@ export class Login {
 		console.log('Login with NIP-07');
 		console.time('NIP-07');
 
+		const storage = new WebStorage(localStorage);
+		storage.set('login', 'NIP-07');
+
 		loginType.set('NIP-07');
 		try {
 			pubkey.set(await Signer.getPublicKey());
@@ -71,14 +74,22 @@ export class Login {
 
 		console.timeLog('NIP-07');
 
-		await this.fetchAuthor();
+		const nip07Relays = await Signer.getRelays();
+
+		console.log('[NIP-07 relays]', nip07Relays);
+		console.timeLog('NIP-07');
+
+		const profileRelays = new Set([...Object.keys(nip07Relays), ...defaultRelays]);
+		console.log('[relays for profile]', profileRelays);
+
+		await this.fetchAuthor(Array.from(profileRelays));
 
 		console.timeEnd('NIP-07');
 	}
 
 	public async withNsec(key: string) {
 		const { type, data: seckey } = nip19.decode(key);
-		if (type !== 'nsec') {
+		if (type !== 'nsec' || typeof seckey !== 'string') {
 			console.error('Invalid nsec');
 			return;
 		}
@@ -88,7 +99,7 @@ export class Login {
 
 		loginType.set('nsec');
 		pubkey.set(getPublicKey(seckey));
-		await this.fetchAuthor();
+		await this.fetchAuthor(defaultRelays);
 	}
 
 	public async withNpub(key: string) {
@@ -106,15 +117,15 @@ export class Login {
 		loginType.set('npub');
 		pubkey.set(data);
 		rom.set(true);
-		await this.fetchAuthor();
+		await this.fetchAuthor(defaultRelays);
 	}
 
-	private async fetchAuthor() {
+	private async fetchAuthor(relays: string[]) {
 		console.time('fetch author');
 
 		const $author = new Author(get(pubkey));
 
-		await $author.fetchRelays();
+		await $author.fetchRelays(relays);
 		console.timeLog('fetch author');
 
 		await $author.fetchEvents();

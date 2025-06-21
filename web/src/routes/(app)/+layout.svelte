@@ -1,16 +1,20 @@
 <script lang="ts">
-	import { now } from 'rx-nostr';
+	import { createRxOneshotReq, latest } from 'rx-nostr';
 	import { WebStorage } from '$lib/WebStorage';
-	import { activeAt } from '$lib/timelines/HomeTimeline';
-	import { reconnectIfConnectionsAreUnstable } from '$lib/timelines/MainTimeline';
+	import { notificationKinds } from '$lib/NotificationTimeline';
+	import { rxNostr } from '$lib/timelines/MainTimeline';
 	import Notice from '$lib/components/Notice.svelte';
 	import Header from './Header.svelte';
 	import NoteDialog from './NoteDialog.svelte';
-	import { openNoteDialog } from '$lib/stores/NoteDialog';
-	import { fetchLastNotification } from '$lib/author/Notifications';
+	import { openNoteDialog } from '../../stores/NoteDialog';
+	import { pubkey } from '../../stores/Author';
+	import { lastReadAt, lastNotifiedAt } from '../../stores/Notifications';
 	import { onMount } from 'svelte';
-	import Gdpr from '$lib/components/Gdpr.svelte';
+	import ReloadDialog from './ReloadDialog.svelte';
+	import '../../app.css';
+	import Gdpr from './parts/Gdpr.svelte';
 
+	let reloadDialogComponent: ReloadDialog;
 	const konamiCode = [
 		'ArrowUp',
 		'ArrowUp',
@@ -24,6 +28,28 @@
 		'a'
 	];
 	let konamiIndex = 0;
+
+	checkNotifications();
+
+	function checkNotifications(): void {
+		const notificationExistsReq = createRxOneshotReq({
+			filters: [
+				{
+					kinds: notificationKinds,
+					'#p': [$pubkey],
+					since: $lastReadAt,
+					limit: 1
+				}
+			]
+		});
+		rxNostr
+			.use(notificationExistsReq)
+			.pipe(latest())
+			.subscribe((packet) => {
+				console.log('[rx-nostr notification packet]', packet);
+				$lastNotifiedAt = packet.event.created_at;
+			});
+	}
 
 	function keyboardShortcut(event: KeyboardEvent) {
 		console.debug(`[${event.type}]`, event.code, event.key, event.ctrlKey, event.metaKey);
@@ -69,8 +95,7 @@
 				break;
 			}
 			case 'visible': {
-				activeAt.set(now());
-				setTimeout(() => reconnectIfConnectionsAreUnstable(), 1000);
+				setTimeout(() => reloadDialogComponent.tryOpen(), 1000);
 				break;
 			}
 		}
@@ -78,7 +103,6 @@
 
 	onMount(() => {
 		subscribeSystemTheme();
-		fetchLastNotification();
 	});
 
 	function subscribeSystemTheme(): void {
@@ -114,6 +138,7 @@
 
 <div class="app">
 	<NoteDialog />
+	<ReloadDialog bind:this={reloadDialogComponent} />
 
 	<header>
 		<div>
@@ -131,7 +156,7 @@
 <style>
 	.app {
 		max-width: 926px;
-		margin: 1rem auto;
+		margin: 2.25rem auto;
 		padding: 0 2.25rem;
 		display: grid;
 		grid-template-columns: 220px 598px;
@@ -144,7 +169,6 @@
 		width: 100%;
 		height: 100%;
 		z-index: 3;
-		overflow-y: auto;
 	}
 
 	main {

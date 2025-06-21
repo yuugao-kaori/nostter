@@ -1,64 +1,56 @@
 <script lang="ts">
-	import { _ } from 'svelte-i18n';
-	import { openNoteDialog } from '$lib/stores/NoteDialog';
-	import { emojiPickerOpen } from '$lib/components/EmojiPicker.svelte';
-	import NoteEditor from '$lib/components/editor/NoteEditor.svelte';
-	import IconX from '@tabler/icons-svelte/icons/x';
+	import { openNoteDialog } from '../../stores/NoteDialog';
+	import NoteEditor from './editor/NoteEditor.svelte';
 
-	let content: string;
-
-	let dialog: HTMLDialogElement | undefined;
+	let dialog: HTMLDialogElement;
 	let editor: NoteEditor;
 
 	openNoteDialog.subscribe(async (open) => {
 		console.log('[note dialog open]', open);
 		if (open) {
-			dialog?.showModal();
+			dialog.showModal();
 		}
 	});
 
-	function tryClose(e: MouseEvent): void {
-		if (emojiPickerOpen || !dialog?.open) {
+	function closeDialog(event: MouseEvent) {
+		if (editor.isAutocompleting()) {
 			return;
 		}
 
-		const element = (e.target as Element).closest('.dialog-content');
-		console.debug('[dialog try close]', element, dialog);
-		if (element === null && dialog !== undefined) {
-			closeIfNotEmpty();
+		let target: HTMLElement | null = event.target as HTMLElement;
+		if (target) {
+			while (target) {
+				if (target?.classList.contains('note-editor')) {
+					return;
+				}
+				target = target.parentElement;
+			}
+		}
+
+		const insideDialog =
+			event.x >= dialog.offsetLeft &&
+			event.x <= dialog.offsetLeft + dialog.offsetWidth &&
+			event.y >= dialog.offsetTop &&
+			event.y <= dialog.offsetTop + dialog.offsetHeight;
+
+		if (!insideDialog) {
+			dialog.close();
 		}
 	}
 
-	function closed(): void {
-		console.log(`[note dialog close]`);
+	async function closed(event: Event) {
+		console.log(`[${event.type}]`);
 		editor.clear();
 	}
 
-	function closeIfNotEmpty(): void {
-		if (content === '' || confirm($_('editor.close.confirm'))) {
-			dialog?.close();
-		}
+	function close() {
+		dialog.close();
 	}
 </script>
 
 <!-- svelte-ignore a11y-click-events-have-key-events -->
-<!-- svelte-ignore a11y-no-noninteractive-element-interactions -->
-<dialog
-	bind:this={dialog}
-	on:click={tryClose}
-	on:close={closed}
-	on:cancel|preventDefault={closeIfNotEmpty}
->
-	<div class="dialog-content">
-		<button
-			class="clear close clickable"
-			on:click={closeIfNotEmpty}
-			title="{$_('editor.close.button')} (Esc)"
-		>
-			<IconX />
-		</button>
-		<NoteEditor bind:this={editor} bind:content on:sent={closeIfNotEmpty} />
-	</div>
+<dialog bind:this={dialog} on:click={closeDialog} on:close={closed}>
+	<NoteEditor bind:this={editor} on:sent={close} />
 </dialog>
 
 <style>
@@ -66,17 +58,9 @@
 		border: var(--border);
 		border-radius: var(--radius);
 		max-width: 600px;
-		margin: 1rem auto;
+		margin: 0 auto;
 		z-index: 1;
 		width: 100%;
-		overflow: visible;
-	}
-
-	button.close {
-		width: 36px;
-		height: 36px;
-		padding: 6px;
-		margin: 0.4rem;
 	}
 
 	@media screen and (max-width: 600px) {

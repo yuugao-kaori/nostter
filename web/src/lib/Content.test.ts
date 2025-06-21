@@ -29,9 +29,6 @@ describe('parse test', () => {
 		expect(Content.parse('#nostter', [['t', 'nostter']])).toStrictEqual([
 			new Token('hashtag', '#nostter')
 		]);
-		expect(Content.parse('#nostter', [['t', '']])).toStrictEqual([
-			new Token('text', '#nostter')
-		]);
 	});
 	it('emoji', () => {
 		expect(
@@ -89,11 +86,6 @@ describe('parse test', () => {
 	it('url', () => {
 		expect(Content.parse('https://example.com/')).toStrictEqual([
 			new Token('url', 'https://example.com/')
-		]);
-	});
-	it('url in JSON', () => {
-		expect(Content.parse('{"key":"https://example.com/"}')).toStrictEqual([
-			new Token('text', '{"key":"https://example.com/"}')
 		]);
 	});
 	// it('url', () => {

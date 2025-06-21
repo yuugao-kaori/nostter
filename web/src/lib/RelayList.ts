@@ -1,40 +1,62 @@
-import { createRxBackwardReq, latestEach, uniq } from 'rx-nostr';
-import type { Event } from 'nostr-typedef';
-import type { pubkey } from './Types';
-import { rxNostr, tie } from './timelines/MainTimeline';
+import { Kind, type Event, SimplePool } from 'nostr-tools';
+import { Api } from './Api';
+import { defaultRelays } from './Constants';
+import { rxNostr } from './timelines/MainTimeline';
+import { parseRelayJson } from './EventHelper';
+import { WebStorage } from './WebStorage';
 
 export class RelayList {
-	static async fetchEvents(pubkeys: pubkey[]): Promise<Map<pubkey, Event>> {
-		const eventsMap = new Map<pubkey, Event>();
-		if (pubkeys.length === 0) {
-			return eventsMap;
+	public static async fetchEvents(
+		pubkey: string,
+		relays: string[] = []
+	): Promise<Map<Kind, Event>> {
+		const pool = new SimplePool();
+		const api = new Api(pool, Array.from(new Set([...relays, ...defaultRelays])));
+
+		const storage = new WebStorage(localStorage);
+
+		const saveCache = (events: Map<Kind, Event>): void => {
+			// Save cache
+			for (const [, event] of events) {
+				storage.setReplaceableEvent(event);
+			}
+		};
+
+		// Load cache
+		const cachedEvents = new Map(
+			[Kind.Contacts, Kind.RelayList]
+				.map((kind) => [kind, storage.getReplaceableEvent(kind)])
+				.filter((x): x is [Kind, Event] => x[1] !== null)
+		);
+		if (cachedEvents.size > 0) {
+			api.fetchRelayEvents(pubkey).then((events) => {
+				api.close();
+				saveCache(events);
+			});
+			return cachedEvents;
 		}
 
-		return new Promise((resolve) => {
-			const req = createRxBackwardReq();
-			rxNostr
-				.use(req)
-				.pipe(
-					tie,
-					uniq(),
-					latestEach(({ event }) => event.pubkey)
-				)
-				.subscribe({
-					next: (packet) => {
-						console.debug('[rx-nostr kind 10002 next]', pubkeys, packet);
-						eventsMap.set(packet.event.pubkey, packet.event);
-					},
-					complete: () => {
-						console.debug('[rx-nostr kind 10002 complete]', pubkeys);
-						resolve(eventsMap);
-					},
-					error: (error) => {
-						console.error('[rx-nostr kind 10002 error]', pubkeys, error);
-						resolve(eventsMap);
-					}
-				});
-			req.emit([{ kinds: [10002], authors: pubkeys }]);
-			req.over();
-		});
+		const events = await api.fetchRelayEvents(pubkey);
+
+		api.close();
+		saveCache(events);
+
+		return events;
+	}
+
+	public static async apply(eventsMap: Map<Kind, Event>) {
+		const kind10002 = eventsMap.get(10002);
+		const kind3 = eventsMap.get(3);
+		if (kind10002 !== undefined) {
+			await rxNostr.switchRelays(kind10002.tags);
+		} else if (kind3 !== undefined && kind3.content !== '') {
+			await rxNostr.switchRelays(
+				[...parseRelayJson(kind3.content)].map(([url, { read, write }]) => {
+					return { url, read, write };
+				})
+			);
+		} else {
+			await rxNostr.switchRelays(defaultRelays);
+		}
 	}
 }

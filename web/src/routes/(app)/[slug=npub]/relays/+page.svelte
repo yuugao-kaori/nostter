@@ -1,47 +1,55 @@
 <script lang="ts">
 	import { _ } from 'svelte-i18n';
+	import { error } from '@sveltejs/kit';
 	import { afterNavigate } from '$app/navigation';
 	import { page } from '$app/stores';
-	import type { LayoutData } from '../$types';
 	import { appName } from '$lib/Constants';
+	import { User as UserDecoder } from '$lib/User';
 	import { Api } from '$lib/Api';
-	import { metadataStore } from '$lib/cache/Events';
-	import { metadataReqEmit, rxNostr } from '$lib/timelines/MainTimeline';
-	import { pubkey as authorPubkey, readRelays, writeRelays } from '$lib/stores/Author';
-	import { developerMode } from '$lib/stores/Preference';
-	import { kinds as Kind } from 'nostr-tools';
+	import { pubkey as authorPubkey, readRelays, writeRelays } from '../../../../stores/Author';
+	import { debugMode } from '../../../../stores/Preference';
+	import { pool } from '../../../../stores/Pool';
+	import { Kind } from 'nostr-tools';
 	import Relay from './Relay.svelte';
 	import { filterRelayTags, parseRelayJson } from '$lib/EventHelper';
 	import { Contacts } from '$lib/Contacts';
-	import IconPencil from '@tabler/icons-svelte/icons/pencil';
-	import IconDeviceFloppy from '@tabler/icons-svelte/icons/device-floppy';
+	import type { User } from '../../../types';
+	import IconPencil from '@tabler/icons-svelte/dist/svelte/icons/IconPencil.svelte';
+	import IconDeviceFloppy from '@tabler/icons-svelte/dist/svelte/icons/IconDeviceFloppy.svelte';
 	import Loading from '$lib/components/Loading.svelte';
-	import { sendEvent } from '$lib/RxNostrHelper';
-	import { unique } from '$lib/Array';
 
-	export let data: LayoutData;
-
-	$: pubkey = data.pubkey;
-	$: metadata = $metadataStore.get(pubkey);
-
+	let pubkey: string;
 	let relays: { url: string; read: boolean; write: boolean }[] = [];
+	let user: User | undefined;
 	let editable = false;
 	let addingRelay = '';
 	let saveToKind3 = false;
 
 	afterNavigate(async () => {
 		console.log('[relays page]', $page.params.slug);
+		const data = await UserDecoder.decode($page.params.slug);
 
-		if (metadata === undefined) {
-			metadataReqEmit([pubkey]);
+		if (data.pubkey === undefined) {
+			throw error(404);
 		}
 
-		const api = new Api();
+		pubkey = data.pubkey;
 
-		const events = await api.fetchRelayEvents(
-			pubkey,
-			unique([...data.relays, ...(pubkey === $authorPubkey ? $writeRelays : $readRelays)])
+		const api = new Api(
+			$pool,
+			Array.from(
+				new Set([
+					...data.relays,
+					...(pubkey === $authorPubkey ? $writeRelays : $readRelays)
+				])
+			)
 		);
+
+		api.fetchUserEvent(pubkey).then((userEvent) => {
+			user = userEvent?.user;
+		});
+
+		const events = await api.fetchRelayEvents(pubkey);
 		console.log('[relay events]', events);
 		const kind10002 = events.get(Kind.RelayList);
 		const kind3 = events.get(Kind.Contacts);
@@ -59,9 +67,6 @@
 			});
 		} else {
 			console.warn('[relay events not found]');
-			if (pubkey === $authorPubkey) {
-				relays = Object.entries(rxNostr.getDefaultRelays()).map(([, config]) => config);
-			}
 		}
 	});
 
@@ -86,11 +91,12 @@
 	async function save() {
 		console.log('[save relays]', relays);
 
-		rxNostr.setDefaultRelays(relays);
+		const newWriteRelays = relays.filter(({ write }) => write).map(({ url }) => url);
 
 		try {
 			// kind 10002
-			await sendEvent(
+			const api = new Api($pool, newWriteRelays);
+			await api.signAndPublish(
 				Kind.RelayList,
 				'',
 				relays
@@ -109,7 +115,7 @@
 			);
 
 			if (saveToKind3) {
-				const contacts = new Contacts($authorPubkey);
+				const contacts = new Contacts($authorPubkey, $pool, $writeRelays);
 				await contacts.updateRelays(
 					new Map(relays.map(({ url, read, write }) => [url, { read, write }]))
 				);
@@ -118,24 +124,24 @@
 			// Completed
 			editable = false;
 		} catch (error) {
-			console.error('[save relays failed]', error);
+			console.error('[save relays failed]');
 			alert('Failed to save relays.');
 		}
 	}
 </script>
 
 <svelte:head>
-	{#if metadata !== undefined}
-		<title>{appName} - {metadata.displayName} (@{metadata.name}) {$_('pages.relays')}</title>
+	{#if user !== undefined}
+		<title>{appName} - {user.display_name} (@{user.name}) {$_('pages.relays')}</title>
 	{:else}
 		<title>{appName} {$_('pages.relays')}</title>
 	{/if}
 </svelte:head>
 
 <h1>
-	{#if metadata !== undefined}
-		<span class="display-name">{metadata.displayName}</span>
-		<span class="name">(@{metadata.name})</span>
+	{#if user !== undefined}
+		<span class="display-name">{user.display_name ?? user.name}</span>
+		<span class="name">(@{user.name ?? user.display_name})</span>
 	{/if}
 	<span>{$_('pages.relays')}</span>
 </h1>
@@ -178,7 +184,7 @@
 					<IconDeviceFloppy />
 					<input type="submit" value="Save" />
 				</label>
-				{#if $developerMode}
+				{#if $debugMode}
 					<div>
 						<label>
 							<input type="checkbox" bind:value={saveToKind3} />

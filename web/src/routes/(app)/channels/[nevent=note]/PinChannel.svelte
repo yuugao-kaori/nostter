@@ -1,40 +1,44 @@
 <script lang="ts">
-	import { createRxOneshotReq, latest, now } from 'rx-nostr';
+	import { createRxNostr, createRxOneshotReq, latest, now } from 'rx-nostr';
 	import { every, firstValueFrom, EmptyError } from 'rxjs';
-	import type { EventTemplate } from 'nostr-tools';
-	import { authorChannelsEventStore } from '$lib/cache/Events';
+	import { onDestroy } from 'svelte';
+	import type { Kind, EventTemplate } from 'nostr-tools';
 	import { Signer } from '$lib/Signer';
-	import { pubkey } from '$lib/stores/Author';
-	import { rxNostr, tie } from '$lib/timelines/MainTimeline';
-	import IconPin from '@tabler/icons-svelte/icons/pin';
-	import IconPinnedFilled from '@tabler/icons-svelte/icons/pinned-filled';
+	import { WebStorage } from '$lib/WebStorage';
+	import { pubkey, writeRelays } from '../../../../stores/Author';
+	import IconPin from '@tabler/icons-svelte/dist/svelte/icons/IconPin.svelte';
+	import IconPinnedFilled from '@tabler/icons-svelte/dist/svelte/icons/IconPinnedFilled.svelte';
 
 	export let channelId: string;
 
-	let pinned =
-		$authorChannelsEventStore?.tags.some(
-			([tagName, id]) => tagName === 'e' && id === channelId
-		) ?? false;
+	const storage = new WebStorage(localStorage);
+	$: pinned =
+		storage
+			.getReplaceableEvent(10005)
+			?.tags.some(([tagName, id]) => tagName === 'e' && id === channelId) ?? false;
+
+	const rxNostr = createRxNostr();
 
 	async function pin() {
 		console.log('[channel pin]', channelId);
 
 		pinned = true;
 
+		await rxNostr.switchRelays($writeRelays);
 		const pinReq = createRxOneshotReq({
 			filters: { kinds: [10005], authors: [$pubkey], limit: 1 }
 		});
-		let unsignedEvent: EventTemplate;
+		let event: EventTemplate;
 		try {
-			const packet = await firstValueFrom(rxNostr.use(pinReq).pipe(tie, latest()));
-			console.debug('[channel pin latest]', packet);
+			const packet = await firstValueFrom(rxNostr.use(pinReq).pipe(latest()));
+			console.log('[channel pin latest]', packet);
 
 			if (packet.event.tags.some(([tagName, id]) => tagName === 'e' && id === channelId)) {
-				console.debug('[channel pin already]', packet.event);
+				console.log('[channel pin already]', packet.event);
 				return;
 			}
 
-			unsignedEvent = {
+			event = {
 				kind: packet.event.kind,
 				content: packet.event.content,
 				tags: [...packet.event.tags, ['e', channelId]],
@@ -42,9 +46,9 @@
 			};
 		} catch (error) {
 			if (error instanceof EmptyError) {
-				console.debug('[channel pin not found]', error);
-				unsignedEvent = {
-					kind: 10005,
+				console.log('[channel pin not found]', error);
+				event = {
+					kind: 10005 as Kind,
 					content: '',
 					tags: [['e', channelId]],
 					created_at: now()
@@ -55,20 +59,15 @@
 			}
 		}
 
-		const event = await Signer.signEvent(unsignedEvent);
-		console.debug('[channel pin event]', event);
-		const observable = rxNostr.send(event);
+		console.log('[channel pin event]', event);
+		const observable = rxNostr.send(await Signer.signEvent(event));
 		observable.subscribe((packet) => {
-			console.debug('[channel pin send]', packet);
-			if (packet.ok && $authorChannelsEventStore?.id !== event.id) {
-				$authorChannelsEventStore = event;
-			}
+			console.log('[send]', packet);
 		});
 		observable.pipe(every((packet) => !packet.ok)).subscribe((failed) => {
 			console.log('[channel pinned]', !failed);
 			if (failed) {
 				console.error('[channel pin failed]');
-				alert('Failed to pin.');
 				pinned = false;
 			}
 		});
@@ -79,21 +78,22 @@
 
 		pinned = false;
 
+		await rxNostr.switchRelays($writeRelays);
 		const pinReq = createRxOneshotReq({
 			filters: { kinds: [10005], authors: [$pubkey], limit: 1 }
 		});
-		let unsignedEvent: EventTemplate;
+		let event: EventTemplate;
 		try {
-			const packet = await firstValueFrom(rxNostr.use(pinReq).pipe(tie, latest()));
-			console.debug('[channel pin latest]', packet);
+			const packet = await firstValueFrom(rxNostr.use(pinReq).pipe(latest()));
+			console.log('[channel pin latest]', packet);
 
 			if (!packet.event.tags.some(([tagName, id]) => tagName === 'e' && id === channelId)) {
-				console.debug('[channel unpin already]', packet.event);
+				console.log('[channel unpin already]', packet.event);
 				return;
 			}
 
 			// Save kind 10005 with new created_at even if empty tags because kind 5 may remain outdated kind 10005
-			unsignedEvent = {
+			event = {
 				kind: packet.event.kind,
 				content: packet.event.content,
 				tags: packet.event.tags.filter(
@@ -103,7 +103,7 @@
 			};
 		} catch (error) {
 			if (error instanceof EmptyError) {
-				console.debug('[channel unpin already]', error);
+				console.log('[channel unpin already]', error);
 				return;
 			} else {
 				pinned = true;
@@ -111,24 +111,24 @@
 			}
 		}
 
-		const event = await Signer.signEvent(unsignedEvent);
-		console.debug('[channel unpin event]', event);
-		const observable = rxNostr.send(event);
+		console.log('[channel unpin event]', event);
+		const observable = rxNostr.send(await Signer.signEvent(event));
 		observable.subscribe((packet) => {
-			console.debug('[channel unpin send]', packet);
-			if (packet.ok && $authorChannelsEventStore?.id !== event.id) {
-				$authorChannelsEventStore = event;
-			}
+			console.log('[send]', packet);
 		});
 		observable.pipe(every((packet) => !packet.ok)).subscribe((failed) => {
-			console.log('[channel unpinned]', !failed);
+			console.log('[channel pinned]', !failed);
 			if (failed) {
 				console.error('[channel unpin failed]');
-				alert('Failed to unpin.');
 				pinned = true;
 			}
 		});
 	}
+
+	onDestroy(async () => {
+		console.log('[channel pin on destroy]');
+		rxNostr.dispose();
+	});
 </script>
 
 {#if pinned}

@@ -1,5 +1,5 @@
 import { nip19 } from 'nostr-tools';
-import type { Nip05 } from 'nostr-typedef';
+import type { ProfilePointer } from 'nostr-tools/lib/nip19';
 
 export class User {
 	static async decode(slug: string): Promise<{ pubkey: string | undefined; relays: string[] }> {
@@ -17,7 +17,7 @@ export class User {
 						break;
 					}
 					case 'nprofile': {
-						const pointer = data as nip19.ProfilePointer;
+						const pointer = data as ProfilePointer;
 						pubkey = pointer.pubkey;
 						relays = pointer.relays ?? [];
 						break;
@@ -28,26 +28,22 @@ export class User {
 				}
 			} else {
 				const match = slug.match(/^(?:([\w-.]+)@)?([\w-.]+)$/);
-				console.debug('[NIP-05 match]', match);
+				console.log('[NIP-05 match]', match);
 				if (match === null) {
 					throw new Error(`${slug} doesn't match NIP-05`);
 				}
 				const [, name = '_', domain] = match;
-				const url = `https://${domain}/.well-known/nostr.json?name=${name}`;
-				console.debug('[NIP-05 url]', url);
-				const response = await fetch(url);
+				const response = await fetch(
+					`https://${domain}/.well-known/nostr.json?name=${name}`
+				);
 				if (!response.ok) {
 					console.error('[invalid NIP-05]', await response.text());
 					throw new Error('fetch failed');
 				}
-				const data = (await response.json()) as Nip05.NostrAddress;
-				console.debug('[NIP-05]', data);
-				pubkey = Object.entries(data.names).find(
-					([key]) => key.toLowerCase() === name.toLowerCase()
-				)?.[1];
-				if (pubkey !== undefined) {
-					relays = data.relays?.[pubkey] ?? [];
-				}
+				const data = await response.json();
+				console.log('[NIP-05]', data);
+				pubkey = data.names[name];
+				relays = data.relays?.[name] ?? [];
 			}
 		} catch (error) {
 			console.error('[decode failed]', slug, error);

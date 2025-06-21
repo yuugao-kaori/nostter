@@ -8,9 +8,3 @@ node_modules
 !.env.example
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
-
-# Playwright
-test-results/
-
-# Sentry Config File
-.sentryclirc

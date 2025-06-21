@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="web/static/logo.svg" height="50">
+  <img src="web/static/nostter-logo.svg" height="50">
 </div>
 <br>
 <p align="center">
@@ -21,31 +21,37 @@ Link to
 https://nostter.app/post?content={url-encoded-text-here}
 ```
 
-### Browser Extension
-
-[Post for nostter](https://chromewebstore.google.com/detail/post-for-nostter/abifdocleldfpalofpbjlndgmojmijab) (Chrome)
-
-### Bookmarklet
+<details>
+<summary>Bookmarklet</summary>
 
 ```js
 javascript:window.open(`https://nostter.app/post?content=${document.title}%20${location.href}`);
 ```
 
+</details>
+
 ## Dependencies
 
 | Category | Names |
 | - | - |
-| Nostr | [Nostr](https://github.com/nostr-protocol/nostr), [nostr-tools](https://github.com/nbd-wtf/nostr-tools), [rx-nostr](https://github.com/penpenpng/rx-nostr), [@rust-nostr/nostr](https://github.com/rust-nostr/nostr), [nip07-awaiter](https://github.com/penpenpng/nip07-awaiter) |
+| Nostr | [Nostr](https://github.com/nostr-protocol/nostr), [nostr-tools](https://github.com/nbd-wtf/nostr-tools), [rx-nostr](https://github.com/penpenpng/rx-nostr), [nip07-awaiter](https://github.com/penpenpng/nip07-awaiter) |
 | Frameworks | Svelte, SvelteKit, Vite |
-| Languages | TypeScript, Node.js |
+| Languages | TypeScript, JavaScript, Node.js |
 | Tests | Vitest, Playwright |
 | UI | [Tabler Icons for Svelte](https://tabler.io/docs/icons/svelte), [emoji-kitchen-mart](https://www.npmjs.com/package/emoji-kitchen-mart) |
 
 See full list at [package.json](web/package.json)
 
+## License
+
+© 2023 SnowCait
+
+This is NOT a OSS.  
+You can refer to a piece of code, but you cannot provide this software as a service.
+
 ## Contribution
 
-Welcome issues, pull requests and discussions.
+Welcome issues, pull requests and discussions after understanding above.
 
 ## Special Thanks
 
@@ -55,4 +61,4 @@ Logo by [@apco](https://nostter.app/npub1njty7prjt49kju6c3mjjlxvm0hjymf5s2qlfcyj
 
 Illustration by [@stok33](https://nostter.app/npub1e09suzmq9mp6nt0ud9ttl03790qjx70wzwlc2pwwghcusvwju54qs0c800)
 
-<img src="https://nostpic.com/media/83d52b4363d2d1bc5a098de7be67c120bfb7c0cee8efefd8eb6e42372af24689/2d4a1909792c29dbecb225735d9509161bb0eeae1ce943f10c56e0b27ae30829.webp" width="25%">
+<img src="web/static/nostter-chan.jpg" width="25%">

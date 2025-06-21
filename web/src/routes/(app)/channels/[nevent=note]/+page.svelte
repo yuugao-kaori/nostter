@@ -3,35 +3,31 @@
 		createRxForwardReq,
 		createRxNostr,
 		createRxOneshotReq,
-		createRxBackwardReq,
 		latest,
 		now,
-		uniq,
-		type LazyFilter
+		uniq
 	} from 'rx-nostr';
-	import { tap, type Subscription, filter } from 'rxjs';
+	import { tap, type Subscription } from 'rxjs';
 	import { onDestroy } from 'svelte';
 	import { nip19, type Event } from 'nostr-tools';
 	import { _ } from 'svelte-i18n';
 	import { error } from '@sveltejs/kit';
-	import IconInfoCircle from '@tabler/icons-svelte/icons/info-circle';
+	import IconInfoCircle from '@tabler/icons-svelte/dist/svelte/icons/IconInfoCircle.svelte';
 	import { page } from '$app/stores';
 	import { afterNavigate, beforeNavigate } from '$app/navigation';
-	import { cachedEvents, channelMetadataEventsStore, metadataStore } from '$lib/cache/Events';
+	import { cachedEvents, channelMetadataEvents, metadataStore } from '$lib/cache/Events';
 	import { Channel, channelIdStore } from '$lib/Channel';
 	import { appName, timeout } from '$lib/Constants';
-	import { fetchEvents } from '$lib/RxNostrHelper';
 	import type { ChannelMetadata } from '$lib/Types';
-	import { referencesReqEmit, tie, verificationClient } from '$lib/timelines/MainTimeline';
-	import { author, readRelays } from '$lib/stores/Author';
-	import Content from '$lib/components/Content.svelte';
+	import { referencesReqEmit } from '$lib/timelines/MainTimeline';
+	import { author, readRelays } from '../../../../stores/Author';
+	import Content from '../../content/Content.svelte';
 	import TimelineView from '../../TimelineView.svelte';
 	import { EventItem } from '$lib/Items';
 	import { minTimelineLength } from '$lib/Constants';
 	import PinChannel from './PinChannel.svelte';
-	import ChannelTitle from '$lib/components/ChannelTitle.svelte';
+	import ChannelTitle from '../../parts/ChannelTitle.svelte';
 	import MuteButton from '$lib/components/MuteButton.svelte';
-	import { oldestCreatedAt } from '$lib/timelines/TimelineHelper';
 
 	let slug = $page.params.nevent;
 	let channelId: string;
@@ -53,7 +49,7 @@
 		const { type, data } = nip19.decode(slug);
 		if (type !== 'nevent') {
 			console.error('[channel page decode error]', slug);
-			error(404);
+			throw error(404);
 		}
 
 		const pointer = data as nip19.EventPointer;
@@ -62,7 +58,7 @@
 		relays = pointer.relays ?? [];
 
 		kind40Event = cachedEvents.get(channelId);
-		kind41Event = $channelMetadataEventsStore.get(channelId);
+		kind41Event = channelMetadataEvents.get(channelId);
 		console.log('[channel metadata cache 40]', kind40Event);
 		console.log('[channel metadata cache 41]', kind41Event);
 
@@ -79,7 +75,7 @@
 		}
 	}
 
-	const rxNostr = createRxNostr({ verifier: verificationClient.verifier, eoseTimeout: timeout });
+	const rxNostr = createRxNostr({ timeout });
 
 	let items: EventItem[] = [];
 
@@ -87,8 +83,8 @@
 		slug = $page.params.nevent;
 		console.log('[channel page after navigate]', slug, channelId);
 		updateChannelMetadata();
-		rxNostr.setDefaultRelays([...$readRelays, ...relays]);
-		console.log('[channel relays]', rxNostr.getDefaultRelays());
+		await rxNostr.switchRelays([...$readRelays, ...relays]);
+		console.log('[channel relays]', rxNostr.getRelays());
 
 		const kind40Filter = {
 			kinds: [40],
@@ -104,12 +100,12 @@
 
 		rxNostr
 			.use(channelMetadataReq)
-			.pipe(tie, uniq(), latest())
+			.pipe(uniq(), latest())
 			.subscribe((packet) => {
 				console.log('[channel metadata event]', packet);
 
 				if (packet.event.kind === 41) {
-					$channelMetadataEventsStore.set(channelId, packet.event);
+					channelMetadataEvents.set(channelId, packet.event);
 				} else {
 					cachedEvents.set(packet.event.id, packet.event);
 				}
@@ -122,7 +118,6 @@
 		channelMessageSubscription = rxNostr
 			.use(channelMessageReq)
 			.pipe(
-				tie,
 				uniq(),
 				tap(({ event }: { event: Event }) => referencesReqEmit(event))
 			)
@@ -157,59 +152,78 @@
 		}
 
 		const firstLength = items.length;
-		const filterBase: LazyFilter = { kinds: [42], '#e': [channelId] };
-		console.debug('[rx-nostr channel messages REQ]', filterBase);
+		let count = 0;
+		let until =
+			items.length > 0
+				? items[items.length - 1].event.created_at
+				: Math.floor(Date.now() / 1000);
+		let seconds = 24 * 60 * 60;
 
-		const { promise, resolve } = Promise.withResolvers<void>();
-		const req = createRxBackwardReq();
-		rxNostr
-			.use(req)
-			.pipe(
-				tie,
-				uniq(),
-				filter(({ event }) => !items.some((item) => item.event.id === event.id)),
-				tap(({ event }) => referencesReqEmit(event))
-			)
-			.subscribe({
-				next: ({ event }) => {
-					console.debug('[rx-nostr channel message next]', event);
-					const item = new EventItem(event);
-					const index = items.findIndex(
-						(x) => x.event.created_at < item.event.created_at
-					);
-					if (index < 0) {
-						items.push(item);
-					} else {
-						items.splice(index, 0, item);
-					}
-					items = items;
-				},
-				complete: () => {
-					console.debug('[rx-nostr channel message complete]', firstLength, items.length);
-					resolve();
-				}
+		while (items.length - firstLength < minTimelineLength && count < 10) {
+			const since = until - seconds;
+			const filter = { kinds: [42], '#e': [channelId], until, since };
+			console.debug('[rx-nostr channel messages REQ]', filter);
+			const pastChannelMessageReq = createRxOneshotReq({ filters: filter });
+			await new Promise<void>((resolve, reject) => {
+				rxNostr
+					.use(pastChannelMessageReq)
+					.pipe(
+						uniq(),
+						tap(({ event }: { event: Event }) => referencesReqEmit(event))
+					)
+					.subscribe({
+						next: async (packet) => {
+							console.debug('[rx-nostr channel message packet]', packet);
+							if (
+								!(
+									since <= packet.event.created_at &&
+									packet.event.created_at < until
+								)
+							) {
+								console.warn(
+									'[rx-nostr channel message out of period]',
+									packet,
+									since,
+									until
+								);
+								return;
+							}
+							if (items.some((x) => x.event.id === packet.event.id)) {
+								console.warn('[rx-nostr channel message duplicate]', packet.event);
+								return;
+							}
+							const item = new EventItem(packet.event);
+							const index = items.findIndex(
+								(x) => x.event.created_at < item.event.created_at
+							);
+							if (index < 0) {
+								items.push(item);
+							} else {
+								items.splice(index, 0, item);
+							}
+							items = items;
+						},
+						complete: () => {
+							console.log('[rx-nostr channel message complete]');
+							resolve();
+						},
+						error: (error) => {
+							reject(error);
+						}
+					});
 			});
-		const until = oldestCreatedAt(items);
-		req.emit([{ ...filterBase, until, since: until - 15 * 60 }]);
-		req.over();
-		await promise;
 
-		const length = items.length - firstLength;
-		if (length < minTimelineLength) {
-			const limit = minTimelineLength - length;
-			const events = await fetchEvents([
-				{ ...filterBase, until: oldestCreatedAt(items), limit }
-			]);
-			items.push(
-				...events
-					.filter((event) => !items.some((item) => item.event.id === event.id))
-					.splice(0, limit)
-					.map((event) => new EventItem(event))
+			until -= seconds;
+			seconds *= 2;
+			count++;
+			console.log(
+				'[rx-nostr channel message loaded]',
+				count,
+				until,
+				seconds / 3600,
+				items.length
 			);
-			items = items;
 		}
-
-		console.log('[rx-nostr channel message loaded]', firstLength, items.length);
 	}
 </script>
 

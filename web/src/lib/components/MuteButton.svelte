@@ -1,14 +1,16 @@
 <script lang="ts">
 	import { nip19 } from 'nostr-tools';
-	import IconVolumeOff from '@tabler/icons-svelte/icons/volume-off';
-	import IconTrash from '@tabler/icons-svelte/icons/trash';
+	import IconVolumeOff from '@tabler/icons-svelte/dist/svelte/icons/IconVolumeOff.svelte';
+	import IconTrash from '@tabler/icons-svelte/dist/svelte/icons/IconTrash.svelte';
+	import { pool } from '../../stores/Pool';
 	import {
 		pubkey as authorPubkey,
 		mutePubkeys,
 		muteEventIds,
-		muteWords
-	} from '$lib/stores/Author';
-	import { mute, unmute } from '$lib/author/Mute';
+		muteWords,
+		writeRelays
+	} from '../../stores/Author';
+	import { Mute } from '$lib/Mute';
 
 	export let tagName: 'p' | 'e' | 'word';
 	export let tagContent: string;
@@ -28,7 +30,7 @@
 		word: tagContent
 	};
 
-	async function onMute(): Promise<void> {
+	async function mute() {
 		console.log('[mute]', logTexts[tagName]);
 
 		if (!confirm(`Mute this ${text ?? texts[tagName]}?`)) {
@@ -39,16 +41,15 @@
 		executing = true;
 
 		try {
-			await mute(tagName, tagContent);
+			await new Mute($authorPubkey, $pool, $writeRelays).mutePrivate(tagName, tagContent);
 		} catch (error) {
-			console.error('[mute failed]', error);
 			alert('Failed to mute.');
 		}
 
 		executing = false;
 	}
 
-	async function onUnmute(): Promise<void> {
+	async function unmute() {
 		console.log('[unmute]', logTexts[tagName]);
 
 		if (!confirm(`Unmute this ${text ?? texts[tagName]}?`)) {
@@ -59,9 +60,8 @@
 		executing = true;
 
 		try {
-			await unmute(tagName, tagContent);
+			await new Mute($authorPubkey, $pool, $writeRelays).unmutePrivate(tagName, tagContent);
 		} catch (error) {
-			console.error('[unmute failed]', error);
 			alert('Failed to unmute.');
 		}
 
@@ -72,10 +72,10 @@
 {#if (tagName === 'p' ? $mutePubkeys : tagName === 'e' ? $muteEventIds : $muteWords).some((c) => c === tagContent)}
 	<div class="muting">
 		<span>Muting</span>
-		<button on:click={onUnmute} disabled={executing}><IconTrash /></button>
+		<button on:click={unmute} disabled={executing}><IconTrash /></button>
 	</div>
 {:else if $authorPubkey !== ''}
-	<button on:click={onMute} disabled={executing}><IconVolumeOff /></button>
+	<button on:click={mute} disabled={executing}><IconVolumeOff /></button>
 {/if}
 
 <style>

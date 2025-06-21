@@ -1,47 +1,33 @@
 <script lang="ts">
-	import { Menu } from '@svelteuidev/core';
-	import IconHome from '@tabler/icons-svelte/icons/home';
-	import IconWorld from '@tabler/icons-svelte/icons/world';
-	import IconSearch from '@tabler/icons-svelte/icons/search';
-	import IconBell from '@tabler/icons-svelte/icons/bell';
-	import IconUser from '@tabler/icons-svelte/icons/user';
-	import IconSettings from '@tabler/icons-svelte/icons/settings';
-	import IconList from '@tabler/icons-svelte/icons/list';
-	import IconBookmark from '@tabler/icons-svelte/icons/bookmark';
-	import IconMessages from '@tabler/icons-svelte/icons/messages';
-	import IconPencilPlus from '@tabler/icons-svelte/icons/pencil-plus';
-	import IconLogin from '@tabler/icons-svelte/icons/login';
-	import IconDots from '@tabler/icons-svelte/icons/dots';
-	import IconPaw from '@tabler/icons-svelte/icons/paw';
+	import IconHome from '@tabler/icons-svelte/dist/svelte/icons/IconHome.svelte';
+	import IconSearch from '@tabler/icons-svelte/dist/svelte/icons/IconSearch.svelte';
+	import IconBell from '@tabler/icons-svelte/dist/svelte/icons/IconBell.svelte';
+	import IconUser from '@tabler/icons-svelte/dist/svelte/icons/IconUser.svelte';
+	import IconSettings from '@tabler/icons-svelte/dist/svelte/icons/IconSettings.svelte';
+	import IconBookmark from '@tabler/icons-svelte/dist/svelte/icons/IconBookmark.svelte';
+	import IconMessages from '@tabler/icons-svelte/dist/svelte/icons/IconMessages.svelte';
+	import IconPencilPlus from '@tabler/icons-svelte/dist/svelte/icons/IconPencilPlus.svelte';
+	import IconLogin from '@tabler/icons-svelte/dist/svelte/icons/IconLogin.svelte';
+	import IconDots from '@tabler/icons-svelte/dist/svelte/icons/IconDots.svelte';
 	import { nip19 } from 'nostr-tools';
+	import { lastReadAt, lastNotifiedAt, unreadEventItems } from '../../stores/Notifications';
+	import { pubkey, rom } from '../../stores/Author';
 	import { _ } from 'svelte-i18n';
 	import { goto } from '$app/navigation';
-	import { preferencesStore } from '$lib/Preferences';
-	import { followeesOfFollowees } from '$lib/author/MuteAutomatically';
-	import { followees, pubkey, rom } from '$lib/stores/Author';
-	import { openNoteDialog } from '$lib/stores/NoteDialog';
-	import { lastReadAt, notifiedEventItems } from '$lib/author/Notifications';
-	import NostterLogo from '$lib/components/logo/NostterLogo.svelte';
-	import NostterLogoIcon from '$lib/components/logo/NostterLogoIcon.svelte';
+	import { openNoteDialog } from '../../stores/NoteDialog';
+	import NostterLogo from './parts/NostterLogo.svelte';
+	import NostterLogoIcon from './parts/NostterLogoIcon.svelte';
 
 	async function onClickPostButton(): Promise<void> {
 		$openNoteDialog = !$openNoteDialog;
 	}
 
-	$: homeLink = $followees.filter((x) => x !== $pubkey).length > 0 ? '/home' : '/trend';
-	$: nprofile = nip19.nprofileEncode({ pubkey: $pubkey });
-	$: notificationsBadge =
-		$notifiedEventItems.filter(
-			(item) =>
-				item.event.created_at > $lastReadAt &&
-				(!$preferencesStore.muteAutomatically ||
-					$followeesOfFollowees.has(item.event.pubkey))
-		).length > 0;
+	let show = false;
 </script>
 
 <div class="header">
 	<div id="logo-icon-wrapper">
-		<a href={$pubkey ? homeLink : '/'} id="logo-icon">
+		<a href={$pubkey ? '/home' : '/'} id="logo-icon">
 			<div class="logo-for-mobile">
 				<NostterLogoIcon />
 			</div>
@@ -51,92 +37,13 @@
 		</a>
 	</div>
 	<nav>
-		<ul class="full">
-			<a href={homeLink}>
-				<li class="clickable">
-					<IconHome size={30} />
-					<p>{$_('layout.header.home')}</p>
-				</li>
-			</a>
-			<a href="/public">
-				<li class="clickable">
-					<IconWorld size={30} />
-					<p>{$_('pages.public')}</p>
-				</li>
-			</a>
-			<a href="/search">
-				<li class="clickable">
-					<IconSearch size={30} />
-					<p>{$_('layout.header.search')}</p>
-				</li>
-			</a>
-			{#if $pubkey}
-				<a href="/notifications">
-					<li class="clickable notifications-icon">
-						<IconBell size={30} />
-						{#if notificationsBadge}
-							<span class="notifications-icon-badge" />
-						{/if}
-						<p>{$_('layout.header.notifications')}</p>
-					</li>
-				</a>
-			{/if}
-			{#if $pubkey}
-				<a href="/{nprofile}/lists">
-					<li class="clickable">
-						<IconList size={30} />
-						<p>{$_('lists.title')}</p>
-					</li>
-				</a>
-				<a href="/{nprofile}/bookmarks">
-					<li class="clickable">
-						<IconBookmark size={30} />
-						<p>{$_('layout.header.bookmarks')}</p>
-					</li>
-				</a>
-			{/if}
-			<a href="/channels">
-				<li class="clickable">
-					<IconMessages size={30} />
-					<p>{$_('layout.header.channels')}</p>
-				</li>
-			</a>
-			{#if $pubkey}
-				<a href="/{nprofile}">
-					<li class="clickable">
-						<IconUser size={30} />
-						<p>{$_('layout.header.profile')}</p>
-					</li>
-				</a>
-				<a href="/preferences">
-					<li class="clickable">
-						<IconSettings size={30} />
-						<p>{$_('layout.header.preferences')}</p>
-					</li>
-				</a>
-			{/if}
-			<a href="/about">
-				<li class="clickable">
-					<IconPaw size={30} />
-					<p>{$_('about.title')}</p>
-				</li>
-			</a>
-		</ul>
-		<ul class="fold">
-			<a href={homeLink}>
+		<ul>
+			<a href="/home">
 				<li>
 					<IconHome size={30} />
 					<p>{$_('layout.header.home')}</p>
 				</li>
 			</a>
-			{#if !$pubkey}
-				<a href="/public">
-					<li>
-						<IconWorld size={30} />
-						<p>{$_('pages.public')}</p>
-					</li>
-				</a>
-			{/if}
 			<a href="/search">
 				<li>
 					<IconSearch size={30} />
@@ -147,78 +54,55 @@
 				<a href="/notifications">
 					<li class="notifications-icon">
 						<IconBell size={30} />
-						{#if notificationsBadge}
+						{#if $unreadEventItems.length > 0 || $lastNotifiedAt > $lastReadAt}
 							<span class="notifications-icon-badge" />
 						{/if}
 						<p>{$_('layout.header.notifications')}</p>
 					</li>
 				</a>
-				<a href="/{nprofile}">
+				<a href="/{nip19.npubEncode($pubkey)}">
 					<li>
 						<IconUser size={30} />
 						<p>{$_('layout.header.profile')}</p>
 					</li>
 				</a>
-				<li>
-					<Menu placement="center">
-						<svelte:fragment slot="control">
-							<IconDots size={30} />
-						</svelte:fragment>
-
-						<Menu.Item icon={IconWorld} on:click={async () => await goto(`/public`)}>
-							{$_('pages.public')}
-						</Menu.Item>
-						<Menu.Item
-							icon={IconList}
-							on:click={async () => await goto(`/${nprofile}/lists`)}
-						>
-							{$_('lists.title')}
-						</Menu.Item>
-						<Menu.Item
-							icon={IconBookmark}
-							on:click={async () => await goto(`/${nprofile}/bookmarks`)}
-						>
-							{$_('layout.header.bookmarks')}
-						</Menu.Item>
-						<Menu.Item
-							icon={IconMessages}
-							on:click={async () => await goto('/channels')}
-						>
-							{$_('layout.header.channels')}
-						</Menu.Item>
-						<Menu.Item
-							icon={IconSettings}
-							on:click={async () => await goto('/preferences')}
-						>
-							{$_('layout.header.preferences')}
-						</Menu.Item>
-						<Menu.Item icon={IconPaw} on:click={async () => await goto('/about')}>
-							{$_('about.title')}
-						</Menu.Item>
-					</Menu>
-				</li>
-			{:else}
-				<a href="/channels">
-					<li>
-						<IconMessages size={30} />
-						<p>{$_('layout.header.channels')}</p>
+				{#if window.matchMedia('(max-width: 600px)').matches}
+					<!-- svelte-ignore a11y-click-events-have-key-events -->
+					<!-- svelte-ignore a11y-no-noninteractive-element-interactions -->
+					<li on:click={() => (show = !show)}>
+						<IconDots size={30} />
+						<p>...</p>
 					</li>
-				</a>
-				<a href="/about">
-					<li>
-						<IconPaw size={30} />
-						<p>{$_('about.title')}</p>
-					</li>
-				</a>
+				{/if}
+				{#if !window.matchMedia('(max-width: 600px)').matches || show}
+					<a href="/{nip19.npubEncode($pubkey)}/bookmarks">
+						<li>
+							<IconBookmark size={30} />
+							<p>{$_('layout.header.bookmarks')}</p>
+						</li>
+					</a>
+					<a href="/channels">
+						<li>
+							<IconMessages size={30} />
+							<p>{$_('layout.header.channels')}</p>
+						</li>
+					</a>
+					<a href="/preferences">
+						<li>
+							<IconSettings size={30} />
+							<p>{$_('layout.header.preferences')}</p>
+						</li>
+					</a>
+				{/if}
 			{/if}
 		</ul>
 	</nav>
 	{#if $pubkey && !$rom}
-		<button title="{$_('post')} (N)" on:click={onClickPostButton}>
+		<button on:click={onClickPostButton}>
 			<IconPencilPlus size={30} />
 			<p>{$_('post')}</p>
 		</button>
-	{:else if !$pubkey}
+	{:else}
 		<button on:click={async () => await goto('/')}>
 			<IconLogin size={30} />
 			<p>{$_('login.login')}</p>
@@ -229,6 +113,7 @@
 <style>
 	.header {
 		/* min-width: 600px */
+		top: 2.25rem;
 		width: 100%;
 		display: flex;
 		flex-direction: column;
@@ -241,50 +126,39 @@
 	.logo-for-desktop {
 		width: 127.5px;
 		height: 32px;
-		margin: 0 1rem;
 	}
 
 	nav {
-		margin-top: 1rem;
-		margin-bottom: 1.5rem;
+		margin-top: 1.5rem;
+		margin-bottom: 2rem;
 	}
 
 	a {
 		align-self: flex-start;
-		text-decoration: none;
 	}
 
 	button {
-		width: calc(100% - 1rem);
+		width: inherit;
 		height: inherit;
 		display: flex;
 		align-items: center;
 		justify-content: center;
 		gap: 0.5rem;
-		margin-left: 1rem;
 	}
 
 	ul {
 		list-style: none;
 		padding: 0;
+		display: flex;
 		flex-flow: column;
 		justify-content: left;
-		gap: 0.5rem;
-	}
-
-	ul.full {
-		display: flex;
-	}
-
-	ul.fold {
-		display: none;
+		gap: 1.5rem;
 	}
 
 	li {
 		display: flex;
 		align-items: center;
 		color: var(--accent);
-		padding: 0.5rem 1rem;
 	}
 
 	li p {
@@ -302,8 +176,8 @@
 
 	.notifications-icon .notifications-icon-badge {
 		position: absolute;
-		top: 0.55rem;
-		left: 2rem;
+		top: 0.05rem;
+		left: 1rem;
 		width: 0.72rem;
 		height: 0.72rem;
 		border-radius: 9999px;
@@ -340,26 +214,16 @@
 			width: 3.125rem;
 			height: 3.125rem;
 			border-radius: 50%;
-			margin: 0;
 		}
 
 		button p {
 			display: none;
 		}
 
-		li {
-			padding: 0.5rem;
-		}
-
 		li p {
 			display: none;
 			margin-left: 0.5rem;
 			font-size: 1.15rem;
-		}
-
-		.notifications-icon .notifications-icon-badge {
-			top: 0.55rem;
-			left: 1.5rem;
 		}
 	}
 
@@ -369,13 +233,12 @@
 			top: auto;
 			bottom: 0;
 			width: 100%;
-			height: calc(3.125rem + env(safe-area-inset-bottom));
+			height: 3.125rem;
 			background-color: var(--background);
 			position: fixed;
 			box-shadow: var(--shadow);
 			justify-content: center;
 			margin-top: 30px;
-			padding-bottom: env(safe-area-inset-bottom);
 		}
 
 		#logo-icon-wrapper {
@@ -397,7 +260,7 @@
 
 		button {
 			position: fixed;
-			bottom: calc(3.125rem + 0.75rem + env(safe-area-inset-bottom));
+			bottom: calc(3.125rem + 0.75rem);
 			right: 0.75rem;
 		}
 
@@ -412,14 +275,6 @@
 			justify-content: space-around;
 			margin: 0;
 			align-items: center;
-		}
-
-		ul.full {
-			display: none;
-		}
-
-		ul.fold {
-			display: flex;
 		}
 
 		li p {

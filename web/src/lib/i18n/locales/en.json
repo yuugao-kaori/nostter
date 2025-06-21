@@ -1,7 +1,4 @@
 {
-	"app": {
-		"description": "Nostr client for web."
-	},
 	"layout": {
 		"header": {
 			"home": "Home",
@@ -19,18 +16,10 @@
 		"thread": "Thread",
 		"followees": "Followees",
 		"followers": "Followers",
-		"followers_see": "See",
 		"pinned": "Pinned",
 		"reactions": "Reactions",
 		"relays": "Relays",
-		"relays_edit": "Edit relays",
-		"timeline": "Timeline",
-		"media": "Media",
-		"latest": "Latest notes",
-		"public": "Public",
-		"trend": {
-			"message": "Trend will be integrated into Public."
-		}
+		"timeline": "Timeline"
 	},
 	"login": {
 		"browser_extension": "Login with Browser Extension",
@@ -44,29 +33,8 @@
 		"hero-message": "Freedom is Here",
 		"hero-message-sub": "All you need is name. No e-mail address, no account suspension, open SNS. Play with Emoji Kitchen."
 	},
-	"logout": {
-		"logout": "Logout",
-		"ensure": "Ensure to save private key before logout",
-		"private_key": "Private Key",
-		"show": "Show",
-		"saved": "Saved"
-	},
 	"editor": {
-		"content": {
-			"placeholder": "What's happening?"
-		},
-		"warning": {
-			"nsec": "Contains private key (nsec). Never post your private key."
-		},
-		"post": {
-			"button": "Post",
-			"empty": "Do you post empty note?",
-			"nsec": "Contains private key (nsec). Are you really going to post it?"
-		},
-		"close": {
-			"button": "Close",
-			"confirm": "Draft exists. Do you close?"
-		}
+		"post": "Post"
 	},
 	"gdpr": {
 		"heading": "Cookie",
@@ -84,242 +52,12 @@
 		}
 	},
 	"post": "Post",
-	"follow": {
-		"follow": "Follow",
-		"following": "Following",
-		"organize": "Organize followees"
-	},
+	"follow": "Follow",
+	"following": "Following",
 	"cancel": "Cancel",
 	"or": "OR",
 	"preferences": {
-		"device": "Device",
-		"shared": "Shared",
-		"theme": {
-			"theme": "Theme",
-			"system": "System",
-			"light": "Light",
-			"dark": "Dark"
-		},
-		"emoji": {
-			"like": "Like emoji",
-			"custom": "Add emojis"
-		},
-		"auto_refresh": "Auto refresh",
-		"media_preview": "Media preview",
-		"image_optimization": "Image optimization",
-		"image_optimization_none": "None",
-		"media_uploader": {
-			"title": "Media uploader"
-		},
 		"uri_scheme": "Open web+nostr: in nostter",
-		"enable_uri_scheme": "Enable",
-		"developer_mode": "Developer mode",
-		"mute": {
-			"mute": "Mute",
-			"pubkeys": "Users",
-			"events": "Threads and Channels",
-			"words": "Words",
-			"none": "-",
-			"automatically": "Hide notifications from someone who is not followees' followee"
-		},
-		"trouble_shooting": "Trouble Shooting",
-		"clear_emoji_cache": "Clear emoji cache",
-		"clear_event_cache": "Clear event cache and reload",
-		"reload": "Reload",
-		"timeline_filter": {
-			"title": "Timeline filter",
-			"categories": {
-				"notes": "Notes",
-				"dms": "DMs",
-				"reposts": "Reposts",
-				"reactions": "Reactions",
-				"channels": "Channels",
-				"zaps": "Zaps"
-			}
-		}
-	},
-	"content": {
-		"show": "Show",
-		"muted": "Muted content",
-		"deleted": "Deleted content",
-		"not_found": "Not found"
-	},
-	"wallet": {
-		"unknown": "Unknown wallet state. Please check your wallet."
-	},
-	"search": {
-		"search": "Search",
-		"options": "Search options",
-		"mine": "My notes",
-		"proxy": "Include external SNS notes",
-		"notes": "Notes",
-		"users": "Users"
-	},
-	"public_chat": {
-		"create_channel": "Create channel",
-		"create": "Create",
-		"channel": {
-			"name": "Channel Name (required)",
-			"about": "Description",
-			"picture": "Picture URL"
-		}
-	},
-	"actions": {
-		"bookmark": {
-			"button": "Bookmark",
-			"failed": "Failed to bookmark"
-		},
-		"unbookmark": {
-			"button": "Unookmark",
-			"confirm": "Unbookmark?",
-			"failed": "Failed to unbookmark"
-		},
-		"repost": {
-			"button": "Repost",
-			"again": "Repost again?"
-		},
-		"quote": {
-			"button": "Quote"
-		},
-		"reaction": {
-			"again": "Reaction again?"
-		},
-		"copy_id": {
-			"button": "Copy ID"
-		},
-		"copy_npub": {
-			"button": "Copy ID (npub)"
-		},
-		"copy_nprofile": {
-			"button": "Copy ID (nprofile)"
-		},
-		"copy_url": {
-			"button": "Copy link"
-		},
-		"open_url": {
-			"button": "Open in %s"
-		},
-		"open_in_other_apps": {
-			"button": "Open in another app"
-		},
-		"share": {
-			"button": "Share link"
-		},
-		"details": {
-			"button": "Details"
-		},
-		"broadcast": {
-			"button": "Broadcast"
-		},
-		"follow": {
-			"myself": "Follow myself",
-			"all": {
-				"button": "Follow all",
-				"confirm": "Are you sure you want to follow %d users?"
-			}
-		},
-		"unfollow": {
-			"myself": "Unfollow myself"
-		},
-		"mute": {
-			"button": "Mute",
-			"user": "Mute this user",
-			"reposts": "Mute reposts",
-			"reactions": "Mute reactions (likes)",
-			"zaps": "Mute zaps",
-			"thread": "Mute this thread",
-			"failed": "Failed to mute."
-		},
-		"unmute": {
-			"button": "Unmute",
-			"user": "Unmute this user",
-			"reposts": "Unmute this user's reposts",
-			"reactions": "Unmute this user's reactions",
-			"zaps": "Unmute this user's zaps",
-			"thread": "Unmute this thread",
-			"failed": "Failed to unmute."
-		},
-		"delete": {
-			"button": "Delete",
-			"confirm": "Are you sure you want to delete this note?"
-		}
-	},
-	"thread": {
-		"date": "Previous and next notes",
-		"reposts": {
-			"after": {
-				"title": "Notes after reposts",
-				"none": "-"
-			}
-		},
-		"quotes": {
-			"title": "Quotes"
-		},
-		"translation": {
-			"title": "Google Translate",
-			"url": "https://translate.google.com/?sl=auto&text={0}&op=translate"
-		}
-	},
-	"error": {
-		"title": "Error",
-		"message": "Not found or something wrong."
-	},
-	"badge": {
-		"accept": "Accept",
-		"accepted": "Accepted",
-		"none": "No badge yet.",
-		"create": "Create a badge."
-	},
-	"replay": {
-		"title": "Replay",
-		"play": "Play"
-	},
-	"about": {
-		"title": "About nostter",
-		"others": "Others"
-	},
-	"media": {
-		"upload": {
-			"failed": "Failed to upload.",
-			"apply": "Apply"
-		}
-	},
-	"lists": {
-		"title": "Lists",
-		"particle": "'s ",
-		"none": "No lists.",
-		"create": "Create",
-		"edit": "Add/Remove from lists"
-	},
-	"notifications": {
-		"all": "all",
-		"others": "etc",
-		"followees_only": "followees only"
-	},
-	"menu": {
-		"developer": "Developer",
-		"caution": "Caution"
-	},
-	"qrcode": {
-		"scan": "Load profile from QR code"
-	},
-	"profile": {
-		"nip05": {
-			"unknown": "Unknown",
-			"impersonation": "Impersonation"
-		}
-	},
-	"poll": {
-		"vote": "Vote",
-		"ends_at": "until %s",
-		"result": "View result"
-	},
-	"zap": {
-		"title": "Zap",
-		"message": "Message (optional)",
-		"send": "Zap"
-	},
-	"timeline": {
-		"update": "Show new posts"
+		"enable_uri_scheme": "Enable"
 	}
 }

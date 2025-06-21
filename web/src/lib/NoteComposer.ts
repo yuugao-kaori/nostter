@@ -2,31 +2,26 @@ import { nip19, type Event } from 'nostr-tools';
 import { Signer } from './Signer';
 import { now } from 'rx-nostr';
 import { Content } from './Content';
+import type { ProfilePointer } from 'nostr-tools/lib/nip19';
 import type { User } from '../routes/types';
 import { Api } from './Api';
+import { pool } from '../stores/Pool';
+import { get } from 'svelte/store';
+import { readRelays } from '../stores/Author';
 import type { EventItem } from './Items';
-import { referTags } from './EventHelper';
-import { getRelayHint } from './timelines/MainTimeline';
-import { unique } from './Array';
 
 export class NoteComposer {
-	async compose(kind: number, content: string, tags: string[][]): Promise<Event> {
-		return await Signer.signEvent({
-			kind,
-			content,
-			tags,
-			created_at: now()
-		});
-	}
-
-	replyTags(
+	async compose(
+		kind: number,
 		content: string,
+		tags: string[][],
 		$replyTo: EventItem | undefined = undefined,
+		emojiTags: string[][] = [],
 		$channelIdStore: string | undefined = undefined,
-		pubkeys: Set<string> = new Set()
-	): string[][] {
-		const tags: string[][] = [];
-
+		pubkeys: Set<string> = new Set(),
+		selectedCustomEmojis: Map<string, string> = new Map(),
+		contentWarningReason: string | undefined = undefined
+	): Promise<Event> {
 		if ($channelIdStore) {
 			tags.push(['e', $channelIdStore, '', 'root']);
 			if ($replyTo !== undefined) {
@@ -45,13 +40,18 @@ export class NoteComposer {
 				}
 			}
 		} else if ($replyTo !== undefined) {
-			const { root } = referTags($replyTo.event);
-			const relay = getRelayHint($replyTo.event.id);
-			if (root === undefined) {
-				tags.push(['e', $replyTo.event.id, relay ?? '', 'root', $replyTo.event.pubkey]);
+			if ($replyTo.event.tags.filter((x) => x[0] === 'e').length === 0) {
+				// root
+				tags.push(['e', $replyTo.event.id, '', 'root']);
 			} else {
-				tags.push(root);
-				tags.push(['e', $replyTo.event.id, relay ?? '', 'reply', $replyTo.event.pubkey]);
+				// reply
+				tags.push(['e', $replyTo.event.id, '', 'reply']);
+				const root = $replyTo.event.tags.find(
+					([tagName, , , marker]) => tagName === 'e' && marker === 'root'
+				);
+				if (root !== undefined) {
+					tags.push(['e', root[1], '', 'root']);
+				}
 			}
 			pubkeys = new Set([
 				$replyTo.event.pubkey,
@@ -60,16 +60,7 @@ export class NoteComposer {
 		}
 
 		const eventIds = Content.findNotesAndNeventsToIds(content);
-		tags.push(
-			...unique(eventIds).map((id) => {
-				const qTag = ['q', id];
-				const relay = getRelayHint(id);
-				if (relay) {
-					qTag.push(relay);
-				}
-				return qTag;
-			})
-		);
+		tags.push(...Array.from(new Set(eventIds)).map((eventId) => ['e', eventId, '', 'mention']));
 
 		for (const { type, data } of Content.findNpubsAndNprofiles(content).map((x) => {
 			try {
@@ -84,32 +75,36 @@ export class NoteComposer {
 					break;
 				}
 				case 'nprofile': {
-					pubkeys.add((data as nip19.ProfilePointer).pubkey);
+					pubkeys.add((data as ProfilePointer).pubkey);
 				}
 			}
 		}
 		tags.push(...Array.from(pubkeys).map((pubkey) => ['p', pubkey]));
 
-		return tags;
-	}
-
-	hashtags(content: string): string[][] {
 		const hashtags = Content.findHashtags(content);
-		return hashtags.map((hashtag) => ['t', hashtag.toLowerCase()]);
-	}
-
-	async emojiTags(content: string, emojiTags: string[][] = []): Promise<string[][]> {
-		const tags: string[][] = [];
+		tags.push(...Array.from(hashtags).map((hashtag) => ['t', hashtag]));
 
 		// Custom emojis
 		tags.push(...emojiTags);
-		const readApi = new Api();
+		const readApi = new Api(get(pool), get(readRelays));
 		const shortcodes = Array.from(
 			new Set(
 				[...content.matchAll(/:(?<shortcode>\w+):/g)]
 					.map((match) => match.groups?.shortcode)
 					.filter((x): x is string => x !== undefined)
 			)
+		);
+		new Map(
+			['npub']
+				.filter((x) => x.startsWith('npub'))
+				.map((x) => {
+					try {
+						// throw new Error();
+						return [x, (x + 1) as string];
+					} catch (e) {
+						return [x, ''];
+					}
+				})
 		);
 		const customEmojiPubkeysMap = new Map(
 			shortcodes
@@ -133,31 +128,29 @@ export class NoteComposer {
 			...shortcodes
 				.filter(([, shortcode]) => !emojiTags.some(([, s]) => s === shortcode))
 				.map((shortcode) => {
-					const pubkey = customEmojiPubkeysMap.get(shortcode);
-					if (pubkey === undefined) {
-						return null;
+					const imageUrl = selectedCustomEmojis.get(shortcode);
+					if (imageUrl === undefined) {
+						const pubkey = customEmojiPubkeysMap.get(shortcode);
+						if (pubkey === undefined) {
+							return null;
+						}
+						const metadataEvent = customEmojiMetadataEventsMap.get(pubkey);
+						if (metadataEvent === undefined) {
+							return null;
+						}
+						try {
+							const metadata = JSON.parse(metadataEvent.content) as User;
+							const picture = new URL(metadata.picture);
+							return ['emoji', shortcode, picture.href];
+						} catch (error) {
+							console.warn('[invalid metadata]', metadataEvent, error);
+							return null;
+						}
 					}
-					const metadataEvent = customEmojiMetadataEventsMap.get(pubkey);
-					if (metadataEvent === undefined) {
-						return null;
-					}
-					try {
-						const metadata = JSON.parse(metadataEvent.content) as User;
-						const picture = new URL(metadata.picture);
-						return ['emoji', shortcode, picture.href];
-					} catch (error) {
-						console.warn('[invalid metadata]', metadataEvent, error);
-						return null;
-					}
+					return ['emoji', shortcode, imageUrl];
 				})
 				.filter((x): x is string[] => x !== null)
 		);
-
-		return tags;
-	}
-
-	contentWarningTags(contentWarningReason: string | undefined = undefined): string[][] {
-		const tags: string[][] = [];
 
 		// Content Warning
 		if (contentWarningReason !== undefined) {
@@ -168,6 +161,11 @@ export class NoteComposer {
 			);
 		}
 
-		return tags;
+		return await Signer.signEvent({
+			kind,
+			content,
+			tags,
+			created_at: now()
+		});
 	}
 }

@@ -1,28 +1,31 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { _ } from 'svelte-i18n';
-	import { nip19 } from 'nostr-tools';
-	import { unmute } from '$lib/author/Mute';
-	import { mutePubkeys } from '$lib/stores/Author';
-	import { metadataReqEmit } from '$lib/timelines/MainTimeline';
-	import IconTrash from '@tabler/icons-svelte/icons/trash';
-	import OnelineProfile from '$lib/components/profile/OnelineProfile.svelte';
+	import { nip19, type Event } from 'nostr-tools';
+	import { Mute } from '$lib/Mute';
+	import { Api } from '$lib/Api';
+	import { Metadata } from '$lib/Items';
+	import { pubkey, mutePubkeys, writeRelays } from '../../../stores/Author';
+	import { pool } from '../../../stores/Pool';
+	import IconTrash from '@tabler/icons-svelte/dist/svelte/icons/IconTrash.svelte';
 
+	let metadataEvents = new Map<string, Event>();
 	let unmuting = false;
 
+	const mute = new Mute($pubkey, $pool, $writeRelays);
+
 	onMount(async () => {
-		metadataReqEmit($mutePubkeys);
+		const api = new Api($pool, $writeRelays);
+		metadataEvents = await api.fetchMetadataEventsMap($mutePubkeys);
 	});
 
-	async function onUnmute(pubkey: string): Promise<void> {
+	async function unmute(pubkey: string) {
 		console.log('[unmute pubkey]', pubkey);
 
 		unmuting = true;
 
 		try {
-			await unmute('p', pubkey);
+			await mute.unmutePrivate('p', pubkey);
 		} catch (error) {
-			console.error('[unmute failed]', error);
 			alert('Failed to unmute.');
 		}
 
@@ -30,22 +33,33 @@
 	}
 </script>
 
+<h4>Muted Pubkeys</h4>
+
 <ul>
 	{#each $mutePubkeys as pubkey}
+		{@const metadataEvent = metadataEvents.get(pubkey)}
+		{@const metadata = metadataEvent === undefined ? undefined : new Metadata(metadataEvent)}
 		<li>
 			<a href="/{nip19.npubEncode(pubkey)}">
-				<OnelineProfile {pubkey} />
+				<img src={metadata?.content?.picture} alt="" title="" />
+				<span
+					>{metadata?.content?.name ??
+						nip19.npubEncode(pubkey).slice(0, 'npub1'.length + 7)}</span
+				>
 			</a>
-			<button class="clear" disabled={unmuting} on:click={() => onUnmute(pubkey)}>
+			<button class="clear" disabled={unmuting} on:click={() => unmute(pubkey)}>
 				<IconTrash size={18} />
 			</button>
 		</li>
-	{:else}
-		<li>{$_('preferences.mute.none')}</li>
 	{/each}
 </ul>
 
 <style>
+	img {
+		width: 20px;
+		height: 20px;
+	}
+
 	button {
 		color: var(--accent-gray);
 	}

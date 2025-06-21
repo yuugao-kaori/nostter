@@ -1,13 +1,12 @@
 <script lang="ts">
 	import type { Event } from 'nostr-tools';
 	import { chronological } from '$lib/Constants';
-	import { findIdentifier } from '$lib/EventHelper';
-	import { userStatusesMap } from '$lib/UserStatus';
-	import { pubkey as authorPubkey } from '$lib/stores/Author';
-	import IconUser from '@tabler/icons-svelte/icons/user';
-	import IconMusic from '@tabler/icons-svelte/icons/music';
-	import IconLink from '@tabler/icons-svelte/icons/link';
-	import IconPencil from '@tabler/icons-svelte/icons/pencil';
+	import { userStatusesGeneral, userStatusesMusic } from '../../stores/UserStatuses';
+	import { pubkey as authorPubkey } from '../../stores/Author';
+	import IconUser from '@tabler/icons-svelte/dist/svelte/icons/IconUser.svelte';
+	import IconMusic from '@tabler/icons-svelte/dist/svelte/icons/IconMusic.svelte';
+	import IconLink from '@tabler/icons-svelte/dist/svelte/icons/IconLink.svelte';
+	import IconPencil from '@tabler/icons-svelte/dist/svelte/icons/IconPencil.svelte';
 
 	export let pubkey: string;
 	export let showLink = false;
@@ -18,13 +17,11 @@
 	let musicLink: URL | undefined;
 
 	$: {
-		const statuses = $userStatusesMap.get(pubkey) ?? [];
-		statuses.sort(chronological);
-		generalEvent = statuses.findLast((event) => findIdentifier(event.tags) === 'general');
-		musicEvent = statuses.findLast((event) => findIdentifier(event.tags) === 'music');
-	}
+		$userStatusesGeneral.sort(chronological);
+		$userStatusesMusic.sort(chronological);
+		generalEvent = $userStatusesGeneral.findLast((event) => event.pubkey === pubkey);
+		musicEvent = $userStatusesMusic.findLast((event) => event.pubkey === pubkey);
 
-	$: {
 		const generalLinkTag = generalEvent?.tags.find(
 			([tagName, url]) => tagName === 'r' && url !== undefined
 		);
@@ -39,16 +36,16 @@
 				musicLink = new URL(musicLinkTag[1]);
 			}
 		} catch (error) {
-			console.error('[user status link error]', error, generalLinkTag, musicLinkTag);
+			console.error('[user status link error]', error);
 		}
 	}
 </script>
 
 <section>
 	{#if generalEvent !== undefined && generalEvent.content !== ''}
-		<div class="general">
-			<span><IconUser size="14" /></span>
-			<span class="content">{generalEvent.content}</span>
+		<div>
+			<IconUser size="14" />
+			<span>{generalEvent.content}</span>
 			{#if showLink}
 				{#if generalLink !== undefined}
 					<a href={generalLink.href} target="_blank" rel="noopener noreferrer">
@@ -68,9 +65,9 @@
 		</div>
 	{/if}
 	{#if musicEvent !== undefined && musicEvent.content !== ''}
-		<div class="music">
-			<span><IconMusic size="14" /></span>
-			<span class="content">{musicEvent.content}</span>
+		<div>
+			<IconMusic size="14" />
+			<span>{musicEvent.content}</span>
 			{#if showLink && musicLink !== undefined}
 				<a href={musicLink.href} target="_blank" rel="noopener noreferrer">
 					<IconLink size="14" />
@@ -82,41 +79,21 @@
 
 <style>
 	section {
+		/* Workaround for unnecessary space */
 		display: flex;
-		flex-direction: row;
-		gap: 0.5rem;
+		flex-direction: column;
 	}
 
 	div {
-		color: var(--accent-gray);
+		color: gray;
 		font-size: 0.7rem;
 
 		text-overflow: ellipsis;
 		overflow: hidden;
+		white-space: nowrap;
 
 		display: flex;
 		flex-direction: row;
-	}
-
-	.general {
-		flex-shrink: 1;
-	}
-
-	.music {
-		flex-shrink: 2;
-	}
-
-	span,
-	a {
-		flex-shrink: 0;
-	}
-
-	span.content {
-		flex-shrink: 1;
-
-		text-overflow: ellipsis;
-		overflow: hidden;
-		white-space: nowrap;
 	}
 
 	a {

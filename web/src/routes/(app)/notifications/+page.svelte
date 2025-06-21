@@ -1,53 +1,49 @@
 <script lang="ts">
-	import { Tabs } from '@svelteuidev/core';
+	import type { Kind } from 'nostr-tools';
 	import type { Filter } from 'nostr-typedef';
-	import { createRxOneshotReq, now, uniq } from 'rx-nostr';
+	import { createRxOneshotReq, uniq } from 'rx-nostr';
 	import { tap } from 'rxjs';
 	import { _ } from 'svelte-i18n';
 	import { afterNavigate, beforeNavigate, goto } from '$app/navigation';
-	import { authorActionReqEmit } from '$lib/author/Action';
-	import { referencesReqEmit, rxNostr, storeSeenOn, tie } from '$lib/timelines/MainTimeline';
-	import { appName, minTimelineLength, notificationsFilterKinds } from '$lib/Constants';
+	import { referencesReqEmit, rxNostr } from '$lib/timelines/MainTimeline';
+	import { NotificationTimeline, notificationKinds } from '$lib/NotificationTimeline';
+	import { appName, minTimelineLength } from '$lib/Constants';
 	import { EventItem } from '$lib/Items';
-	import { lastReadAt, notifiedEventItems } from '$lib/author/Notifications';
-	import { pubkey, author } from '$lib/stores/Author';
+	import { Api } from '$lib/Api';
+	import { notifiedEventItems, unreadEventItems } from '../../../stores/Notifications';
+	import { pubkey, author, writeRelays } from '../../../stores/Author';
+	import { pool } from '../../../stores/Pool';
 	import TimelineView from '../TimelineView.svelte';
-	import IconAt from '@tabler/icons-svelte/icons/at';
-	import IconRepeat from '@tabler/icons-svelte/icons/repeat';
-	import IconHeart from '@tabler/icons-svelte/icons/heart';
-	import IconBolt from '@tabler/icons-svelte/icons/bolt';
-	import { preferencesStore } from '$lib/Preferences';
-	import { followeesOfFollowees } from '$lib/author/MuteAutomatically';
-	import { Signer } from '$lib/Signer';
-
-	$: items = $notifiedEventItems.filter(
-		(item) =>
-			!$preferencesStore.muteAutomatically || $followeesOfFollowees.has(item.event.pubkey)
-	);
 
 	afterNavigate(async () => {
-		console.debug('[notifications page]');
+		console.log('[notifications page]');
 
 		if ($author === undefined) {
 			await goto('/');
 		}
+
+		clear();
 	});
 
 	beforeNavigate(async () => {
-		console.debug('[notifications page leave]');
+		console.log('[notifications page leave]');
+		clear();
 
-		const event = await Signer.signEvent({
-			kind: 30078,
-			content: '',
-			tags: [['d', 'nostter-read']],
-			created_at: now()
-		});
-		rxNostr.send(event);
-		lastReadAt.set(event.created_at);
+		const api = new Api($pool, $writeRelays);
+		try {
+			await api.signAndPublish(30078 as Kind, '', [['d', 'nostter-read']]);
+		} catch (error) {
+			console.warn('[last read failed]', error);
+		}
 	});
+
+	function clear(): void {
+		$unreadEventItems = [];
+	}
 
 	async function load() {
 		console.log('[rx-nostr notification timeline load]');
+		const timeline = new NotificationTimeline($pubkey);
 
 		let firstLength = $notifiedEventItems.length;
 		let count = 0;
@@ -67,7 +63,7 @@
 
 			const filters: Filter[] = [
 				{
-					kinds: notificationsFilterKinds,
+					kinds: notificationKinds,
 					'#p': [$pubkey],
 					until,
 					since
@@ -77,20 +73,15 @@
 			console.debug(
 				'[rx-nostr notification timeline REQ]',
 				filters,
-				rxNostr.getAllRelayStatus()
+				rxNostr.getAllRelayState()
 			);
 			const pastEventsReq = createRxOneshotReq({ filters });
 			await new Promise<void>((resolve, reject) => {
 				rxNostr
 					.use(pastEventsReq)
 					.pipe(
-						tie,
 						uniq(),
-						tap(({ event, from }) => {
-							referencesReqEmit(event);
-							authorActionReqEmit(event);
-							storeSeenOn(event.id, from);
-						})
+						tap(({ event }) => referencesReqEmit(event))
 					)
 					.subscribe({
 						next: async (packet) => {
@@ -107,9 +98,6 @@
 									since,
 									until
 								);
-								return;
-							}
-							if (!$author?.isNotified(packet.event)) {
 								return;
 							}
 							if ($notifiedEventItems.some((x) => x.event.id === packet.event.id)) {
@@ -139,6 +127,9 @@
 						}
 					});
 			});
+			const pastEventItems = await timeline.fetch(until, until - seconds);
+			$notifiedEventItems.push(...pastEventItems);
+			$notifiedEventItems = $notifiedEventItems;
 
 			until -= seconds;
 			seconds *= 2;
@@ -160,65 +151,4 @@
 
 <h1>{$_('layout.header.notifications')}</h1>
 
-<Tabs grow>
-	<Tabs.Tab>
-		<svelte:fragment slot="label">
-			<div>{$_('notifications.all')}</div>
-		</svelte:fragment>
-		<TimelineView {items} {load} />
-	</Tabs.Tab>
-	<Tabs.Tab>
-		<svelte:fragment slot="icon">
-			<IconAt color="var(--orange)" size={20} />
-		</svelte:fragment>
-		<TimelineView items={items.filter((item) => item.event.kind === 1)} showLoading={false} />
-	</Tabs.Tab>
-	<Tabs.Tab>
-		<svelte:fragment slot="icon">
-			<IconRepeat color="var(--green)" size={20} />
-		</svelte:fragment>
-		<TimelineView
-			items={items.filter((item) => [6, 16].includes(item.event.kind))}
-			showLoading={false}
-		/>
-	</Tabs.Tab>
-	<Tabs.Tab>
-		<svelte:fragment slot="icon">
-			<IconHeart color="var(--pink)" size={20} />
-		</svelte:fragment>
-		<TimelineView items={items.filter((item) => item.event.kind === 7)} showLoading={false} />
-	</Tabs.Tab>
-	<Tabs.Tab>
-		<svelte:fragment slot="icon">
-			<IconBolt color="var(--yellow)" size={20} />
-		</svelte:fragment>
-		<TimelineView
-			items={items.filter((item) => item.event.kind === 9735)}
-			showLoading={false}
-		/>
-	</Tabs.Tab>
-	<Tabs.Tab>
-		<svelte:fragment slot="label">
-			<div>{$_('notifications.others')}</div>
-		</svelte:fragment>
-		<TimelineView
-			items={items.filter((item) => ![1, 6, 16, 7, 9735].includes(item.event.kind))}
-			showLoading={false}
-		/>
-	</Tabs.Tab>
-</Tabs>
-
-<style>
-	h1 {
-		display: flex;
-		justify-content: space-between;
-	}
-
-	div {
-		color: var(--accent);
-	}
-
-	:global(button.svelteui-Tab) {
-		border-radius: 0;
-	}
-</style>
+<TimelineView items={$notifiedEventItems} {load} />

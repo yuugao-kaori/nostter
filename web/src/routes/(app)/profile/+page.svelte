@@ -1,79 +1,19 @@
 <script lang="ts">
-	import { kinds as Kind, nip19 } from 'nostr-tools';
+	import { Kind, nip19 } from 'nostr-tools';
 	import { _ } from 'svelte-i18n';
-	import Cropper from 'svelte-easy-crop';
-	import { goto } from '$app/navigation';
-	import { FileStorageServer } from '$lib/media/FileStorageServer';
-	import { getMediaUploader } from '$lib/media/Media';
 	import { appName } from '$lib/Constants';
-	import { pubkey, author, authorProfile, metadataEvent } from '$lib/stores/Author';
-	import MediaPicker from '$lib/components/MediaPicker.svelte';
-	import ModalDialog from '$lib/components/ModalDialog.svelte';
-	import { sendEvent } from '$lib/RxNostrHelper';
-
-	//#region Cropper
-
-	type Pixels = { height: number; width: number; x: number; y: number };
-
-	let open = false;
-	let url = '';
-	let pixels: Pixels | undefined;
-	let complete: (value: File | PromiseLike<File | undefined> | undefined) => void;
-
-	async function crop(file: File): Promise<File | undefined> {
-		console.debug('[profile picture crop]', file);
-		return new Promise((resolve) => {
-			complete = resolve;
-			const reader = new FileReader();
-			reader.addEventListener('load', () => {
-				console.debug('[profile picture data url]', reader.result);
-				if (typeof reader.result === 'string') {
-					url = reader.result;
-					open = true;
-				}
-			});
-			reader.readAsDataURL(file);
-		});
-	}
-
-	function onCropComplete({ detail }: { detail: { pixels: Pixels } }): void {
-		pixels = detail.pixels;
-	}
-
-	function applyCrop() {
-		console.debug('[profile picture apply]', pixels);
-		const image = new Image();
-		image.addEventListener('load', () => {
-			console.debug('[profile picture apply load]', image);
-			const canvas = document.createElement('canvas');
-			const ctx = canvas.getContext('2d');
-			if (ctx === null || pixels === undefined) {
-				complete(undefined);
-				return;
-			}
-			canvas.width = image.width;
-			canvas.height = image.height;
-			ctx.drawImage(image, 0, 0);
-			const data = ctx.getImageData(pixels.x, pixels.y, pixels.width, pixels.height);
-			canvas.width = pixels.width;
-			canvas.height = pixels.height;
-			ctx.putImageData(data, 0, 0);
-			ctx.canvas.toBlob((file) => {
-				complete(file as File);
-				open = false;
-			});
-		});
-		image.src = url;
-	}
-
-	function close(): void {
-		console.debug('[profile picture crop close]');
-		complete(undefined);
-		url = '';
-		pixels = undefined;
-	}
-
-	//#endregion
+	import { Api } from '$lib/Api';
+	import { NostrcheckMe } from '$lib/media/NostrcheckMe';
+	import {
+		pubkey,
+		author,
+		authorProfile,
+		metadataEvent,
+		writeRelays
+	} from '../../../stores/Author';
+	import { pool } from '../../../stores/Pool';
+	import { goto } from '$app/navigation';
+	import MediaPicker from '../editor/MediaPicker.svelte';
 
 	async function picturePicked({ detail: files }: { detail: FileList }): Promise<void> {
 		console.log('[profile picture]', files);
@@ -82,23 +22,14 @@
 		}
 
 		const file = files[0];
-		const croppedFile = await crop(file);
-		if (croppedFile === undefined) {
-			// Cancelled
-			return;
-		}
-
-		console.debug('[profile picture cropped file]', croppedFile);
-
 		try {
-			const media = new FileStorageServer(getMediaUploader());
-			const { url } = await media.upload(croppedFile);
+			const media = new NostrcheckMe();
+			const { url } = await media.upload(file);
 			if (url) {
 				$authorProfile.picture = url;
 			}
 		} catch (error) {
 			console.error('[media upload error]', error);
-			alert($_('media.upload.failed'));
 		}
 	}
 
@@ -110,14 +41,13 @@
 
 		const file = files[0];
 		try {
-			const media = new FileStorageServer(getMediaUploader());
+			const media = new NostrcheckMe();
 			const { url } = await media.upload(file);
 			if (url) {
 				$authorProfile.banner = url;
 			}
 		} catch (error) {
 			console.error('[media upload error]', error);
-			alert($_('media.upload.failed'));
 		}
 	}
 
@@ -129,8 +59,9 @@
 			return;
 		}
 
+		const api = new Api($pool, $writeRelays);
 		try {
-			await sendEvent(
+			await api.signAndPublish(
 				Kind.Metadata,
 				JSON.stringify($authorProfile),
 				$metadataEvent?.tags ?? []
@@ -149,18 +80,8 @@
 
 <h1>{$_('pages.profile_edit')}</h1>
 
-<ModalDialog bind:open on:close={close}>
-	<div class="crop">
-		<Cropper image={url} aspect={1} maxZoom={10} on:cropcomplete={onCropComplete} />
-	</div>
-
-	<form class="apply" on:submit|preventDefault={applyCrop}>
-		<input type="submit" value={$_('media.upload.apply')} />
-	</form>
-</ModalDialog>
-
 <!-- svelte-ignore a11y-no-noninteractive-element-interactions -->
-<form class="card" on:submit|preventDefault={save} on:keyup|stopPropagation={console.debug}>
+<form on:submit|preventDefault={save} on:keyup|stopPropagation={console.debug}>
 	<div class="picture">
 		<label for="picture">Picture</label>
 		<div>
@@ -205,7 +126,7 @@
 		/>
 	</div>
 	<div class="nip05">
-		<label for="nip05">Nostr Address</label>
+		<label for="nip05">NIP-05</label>
 		<input
 			type="text"
 			id="nip05"
@@ -244,7 +165,7 @@
 
 <style>
 	div {
-		margin-bottom: 1rem;
+		margin: 1rem 0;
 	}
 
 	input[type='url'],
@@ -268,22 +189,16 @@
 	}
 
 	textarea {
-		height: 20rem;
-		border: var(--default-border);
+		height: 10rem;
+	}
+
+	input[type='submit'] {
+		height: 2rem;
+		margin-bottom: 2rem;
 	}
 
 	img {
 		max-width: 100%;
 		max-height: 10rem;
-	}
-
-	.crop {
-		position: relative;
-		width: 300px;
-		height: 300px;
-	}
-
-	.apply {
-		text-align: center;
 	}
 </style>

@@ -1,17 +1,7 @@
 import type { Event } from 'nostr-tools';
 import { get } from 'svelte/store';
 import { findIdentifier } from './EventHelper';
-import { pubkey } from './stores/Author';
-import { appName } from './Constants';
-import { persisted, type Persisted } from 'svelte-persisted-store';
-
-export function persistedStore<StoreType>(
-	key: string,
-	initialValue: StoreType
-): Persisted<StoreType> {
-	return persisted(`${appName}:${key}`, initialValue);
-}
-
+import { pubkey } from '../stores/Author';
 export class WebStorage {
 	public constructor(private readonly storage: Storage) {}
 
@@ -21,10 +11,6 @@ export class WebStorage {
 
 	public set(key: string, value: string): void {
 		this.storage.setItem(`nostter:${key}`, value);
-	}
-
-	public remove(key: string): void {
-		this.storage.removeItem(`nostter:${key}`);
 	}
 
 	public clear(): void {

@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { _ } from 'svelte-i18n';
 	import { writable, type Writable } from 'svelte/store';
 	import { browser } from '$app/environment';
 	import { WebStorage } from '$lib/WebStorage';
@@ -26,23 +25,21 @@
 					document.documentElement.classList.remove('dark');
 				}
 			}
-
-			const color = getComputedStyle(document.documentElement).getPropertyValue(
-				'--background'
-			);
-			let themeColorMetaTag: HTMLMetaElement = document.querySelector(
-				'meta[name="theme-color"]'
-			) as HTMLMetaElement;
-			themeColorMetaTag.content = color;
 		});
 	}
 </script>
 
 <div>
-	<label for="theme-select">{$_('preferences.theme.theme')}:</label>
+	<label for="theme-select">Theme:</label>
 	<select bind:value={$theme} id="theme-select">
-		<option value="system">{$_('preferences.theme.system')}</option>
-		<option value="light">{$_('preferences.theme.light')}</option>
-		<option value="dark">{$_('preferences.theme.dark')}</option>
+		<option value="system">System</option>
+		<option value="light">Light</option>
+		<option value="dark">Dark</option>
 	</select>
 </div>
+
+<style>
+	select {
+		color: inherit;
+	}
+</style>

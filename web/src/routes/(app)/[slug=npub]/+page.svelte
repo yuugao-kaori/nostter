@@ -1,65 +1,55 @@
 <script lang="ts">
 	import { page } from '$app/stores';
-	import { nip05 } from 'nostr-tools';
+	import { type Event, nip05, nip19 } from 'nostr-tools';
 	import { createRxOneshotReq, now, uniq } from 'rx-nostr';
 	import { tap } from 'rxjs';
-	import { afterNavigate, replaceState } from '$app/navigation';
-	import { authorActionReqEmit } from '$lib/author/Action';
-	import { metadataStore, storeMetadata } from '$lib/cache/Events';
-	import { metadataReqEmit, referencesReqEmit, rxNostr, tie } from '$lib/timelines/MainTimeline';
-	import { pubkey as authorPubkey } from '$lib/stores/Author';
-	import { Timeline } from '$lib/Timeline';
-	import { EventItem } from '$lib/Items';
-	import { minTimelineLength } from '$lib/Constants';
-	import { replaceableEvents, replaceableEventsReqEmit } from '$lib/Profile';
-	import type { LayoutData } from './$types';
-	import { developerMode } from '$lib/stores/Preference';
-	import Profile from './Profile.svelte';
+	import { metadataStore } from '$lib/cache/Events';
+	import { metadataReqEmit, referencesReqEmit, rxNostr } from '$lib/timelines/MainTimeline';
+	import { normalizeNip05 } from '$lib/MetadataHelper';
 	import TimelineView from '../TimelineView.svelte';
+	import { pubkey as authorPubkey, readRelays } from '../../../stores/Author';
+	import { Timeline } from '$lib/Timeline';
+	import { EventItem, Metadata } from '$lib/Items';
+	import { appName, minTimelineLength } from '$lib/Constants';
+	import type { LayoutData } from './$types';
+	import Profile from '$lib/components/Profile.svelte';
 
 	export let data: LayoutData;
 
-	$: metadata = $metadataStore.get(data.pubkey);
-
+	let metadata: Metadata | undefined;
 	let events: EventItem[] = [];
+
+	let relays = $readRelays;
 	let slug = $page.params.slug;
 
-	afterNavigate(() => {
-		console.debug('[npub page]', data.pubkey);
+	$: if (metadata === undefined || metadata.event.pubkey !== data.pubkey) {
+		console.log('[npub metadata]', nip19.npubEncode(data.pubkey));
 
 		events = [];
+		relays = [...new Set([...$readRelays, ...data.relays])];
 
+		metadata = $metadataStore.get(data.pubkey);
 		if (metadata === undefined) {
-			if (data.metadataEvent !== undefined) {
-				storeMetadata(data.metadataEvent);
-			} else {
-				metadataReqEmit([data.pubkey]);
-			}
+			metadataReqEmit([data.pubkey]);
 		} else {
 			referencesReqEmit(metadata.event);
 			overwriteSlug();
 		}
-
-		if ($developerMode) {
-			$replaceableEvents.clear();
-			$replaceableEvents = $replaceableEvents;
-			replaceableEventsReqEmit(data.pubkey);
-		}
-	});
+	}
 
 	function overwriteSlug() {
-		if (metadata?.content === undefined) {
+		if (metadata?.content === undefined || !metadata.content.nip05) {
 			return;
 		}
 
-		const normalizedNip05 = metadata.normalizedNip05;
-		if (normalizedNip05 === '' || slug === normalizedNip05) {
+		const normalizedNip05 = normalizeNip05(metadata.content.nip05);
+		if (slug === normalizedNip05) {
 			return;
 		}
 
 		nip05.queryProfile(normalizedNip05).then((pointer) => {
 			if (pointer !== null) {
-				replaceState(`/${normalizedNip05}`, {});
+				history.replaceState(history.state, '', normalizedNip05);
 				slug = normalizedNip05;
 			} else {
 				console.warn('[invalid NIP-05]', normalizedNip05);
@@ -85,22 +75,22 @@
 			);
 
 			const filters = Timeline.createChunkedFilters([data.pubkey], since, until);
-			console.log('[rx-nostr user timeline REQ]', filters, rxNostr.getAllRelayStatus());
+			console.log('[rx-nostr user timeline REQ]', filters, rxNostr.getAllRelayState());
 			const pastEventsReq = createRxOneshotReq({ filters });
-			console.log('[rx-nostr user timeline req ID]', pastEventsReq);
+			console.log(
+				'[rx-nostr user timeline req ID]',
+				pastEventsReq.strategy,
+				pastEventsReq.rxReqId
+			);
 			await new Promise<void>((resolve, reject) => {
 				rxNostr
 					.use(pastEventsReq)
 					.pipe(
-						tie,
 						uniq(),
-						tap(({ event }) => {
-							referencesReqEmit(event);
-							authorActionReqEmit(event);
-						})
+						tap(({ event }: { event: Event }) => referencesReqEmit(event))
 					)
 					.subscribe({
-						next: (packet) => {
+						next: async (packet) => {
 							console.log('[rx-nostr user timeline packet]', packet);
 							if (
 								!(
@@ -156,8 +146,17 @@
 	}
 </script>
 
+<svelte:head>
+	{#if metadata !== undefined}
+		<title>{appName} - {metadata.displayName} (@{metadata.name})</title>
+		<meta property="og:image" content={metadata.picture} />
+	{:else}
+		<title>{appName} - ghost</title>
+	{/if}
+</svelte:head>
+
 <section class="card profile-wrapper">
-	<Profile {slug} pubkey={data.pubkey} {metadata} relays={data.relays} />
+	<Profile {slug} {metadata} {relays} />
 </section>
 
 <section>

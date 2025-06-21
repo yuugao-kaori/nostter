@@ -1,18 +1,18 @@
 <script lang="ts">
-	import { SvelteUIProvider } from '@svelteuidev/core';
 	import { page } from '$app/stores';
 	import { appName } from '$lib/Constants';
-	import '../app.css';
+
+	const description = '星海天測団 nostter支部.Nostr client for web. Forked from nostter.';
 </script>
 
 <svelte:head>
-	<title>{$page.data.title}</title>
-	<meta name="description" content={$page.data.description} />
-	<meta property="og:title" content={$page.data.title} />
+	<title>{appName}</title>
+	<meta name="description" content={description} />
+	<meta property="og:title" content={appName} />
 	<meta property="og:type" content="website" />
-	<meta property="og:image" content={$page.data.image} />
+	<meta property="og:image" content={`${$page.url.origin}/icon.192.png`} />
 	<meta property="og:url" content={$page.url.href} />
-	<meta property="og:description" content={$page.data.description} />
+	<meta property="og:description" content={description} />
 	<meta property="og:site_name" content={appName} />
 	<meta name="twitter:card" content="summary" />
 	<style>
@@ -37,14 +37,8 @@
 		) {
 			document.documentElement.classList.add('dark');
 		}
-
-		const color = getComputedStyle(document.documentElement).getPropertyValue('--background');
-		let themeColorMetaTag = document.querySelector('meta[name="theme-color"]');
-		themeColorMetaTag.content = color;
 	</script>
 	<script async src="https://www.googletagmanager.com/gtag/js?id=G-G1WMSV0PBP"></script>
 </svelte:head>
 
-<SvelteUIProvider>
-	<slot />
-</SvelteUIProvider>
+<slot />

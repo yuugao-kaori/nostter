@@ -1,12 +1,13 @@
 <script lang="ts">
-	import { _ } from 'svelte-i18n';
+	import { now } from 'rx-nostr';
 	import { toEmoji } from '$lib/Emoji';
-	import { preferencesStore, savePreferences } from '$lib/Preferences';
-	import IconHeart from '@tabler/icons-svelte/icons/heart';
-	import EmojiPicker from '$lib/components/EmojiPicker.svelte';
-	import CustomEmoji from '$lib/components/content/CustomEmoji.svelte';
+	import { preferencesStore } from '$lib/Preferences';
+	import { Signer } from '$lib/Signer';
+	import { rxNostr } from '$lib/timelines/MainTimeline';
+	import IconHeart from '@tabler/icons-svelte/dist/svelte/icons/IconHeart.svelte';
+	import EmojiPicker from '../parts/EmojiPicker.svelte';
+	import CustomEmoji from '../content/CustomEmoji.svelte';
 
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	async function save({ detail }: { detail: any }) {
 		const emoji = toEmoji(detail);
 		console.log('[reaction emoji save]', emoji, $preferencesStore.reactionEmoji);
@@ -20,11 +21,21 @@
 		}
 
 		$preferencesStore.reactionEmoji = emoji;
-		savePreferences();
+
+		const event = await Signer.signEvent({
+			created_at: now(),
+			kind: 30078,
+			tags: [['d', 'nostter-preferences']],
+			content: $preferencesStore.toJson()
+		});
+		console.log('[reaction emoji]', event);
+		rxNostr.send(event).subscribe((packet) => {
+			console.log('[rx-nostr send]', packet);
+		});
 	}
 </script>
 
-<span>{$_('preferences.emoji.like')}:</span>
+<span>Like emoji:</span>
 <EmojiPicker on:pick={save}>
 	{#if $preferencesStore.reactionEmoji.content === '+'}
 		<IconHeart size={26} color={'lightpink'} />

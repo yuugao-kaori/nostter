@@ -1,10 +1,8 @@
 <script lang="ts">
 	import { nip19 } from 'nostr-tools';
-	import { type EventItem, type Item, alternativeName } from '$lib/Items';
+	import type { EventItem, Item } from '$lib/Items';
 	import { metadataStore } from '$lib/cache/Events';
-	import UserStatus from './UserStatus.svelte';
-	import CreatedAt from './CreatedAt.svelte';
-	import ProfileIcon from './profile/ProfileIcon.svelte';
+	import CreatedAt from '../../routes/(app)/CreatedAt.svelte';
 
 	export let item: Item;
 	export let createdAtFormat: 'auto' | 'time' = 'auto';
@@ -16,7 +14,7 @@
 <article class="timeline-item">
 	<div>
 		<a href="/{nip19.npubEncode(item.event.pubkey)}">
-			<ProfileIcon pubkey={item.event.pubkey} width="48px" height="48px" />
+			<img class="picture" src={metadata?.picture} alt="" />
 		</a>
 		<div class="icon">
 			<slot name="icon" />
@@ -25,19 +23,18 @@
 	<div class="note">
 		<div class="user">
 			<div class="display_name">
-				{metadata?.displayName ?? alternativeName(item.event.pubkey)}
+				{metadata?.content?.display_name
+					? metadata?.content.display_name
+					: metadata?.content?.name}
 			</div>
-			{#if metadata !== undefined && metadata.displayName !== metadata.name}
-				<div class="name">
-					@{metadata.name ?? alternativeName(item.event.pubkey)}
-				</div>
-			{/if}
+			<div class="name">
+				@{metadata?.content?.name
+					? metadata?.content.name
+					: metadata?.content?.display_name}
+			</div>
 			<div class="created_at">
 				<CreatedAt createdAt={item.event.created_at} format={createdAtFormat} />
 			</div>
-		</div>
-		<div>
-			<UserStatus pubkey={item.event.pubkey} />
 		</div>
 		<slot name="content" />
 	</div>
@@ -47,7 +44,14 @@
 	article {
 		display: flex;
 		flex-direction: row;
-		gap: 12px;
+	}
+
+	.picture {
+		width: 48px;
+		height: 48px;
+		border-radius: 50%;
+		margin-right: 12px;
+		object-fit: cover;
 	}
 
 	.icon {
@@ -73,18 +77,17 @@
 	.user {
 		display: flex;
 		flex-direction: row;
-		gap: 0.3rem;
+		flex-wrap: wrap;
 	}
 
 	.display_name {
+		margin-right: 4px;
 		font-weight: 700;
-		flex-shrink: 1;
 	}
 
 	.name {
 		color: var(--accent-gray);
 		font-size: 15px;
-		flex-shrink: 2;
 	}
 
 	.display_name,
@@ -96,6 +99,5 @@
 
 	.created_at {
 		margin-left: auto;
-		flex-shrink: 0;
 	}
 </style>
